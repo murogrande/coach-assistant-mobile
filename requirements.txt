@@ -1,0 +1,13 @@
+# Kivy and KivyMD
+kivy==2.3.0
+kivymd==2.0.1.dev0
+
+# HTTP requests
+requests==2.31.0
+
+# Date/time utilities
+python-dateutil==2.8.2
+
+# Development tools (optional)
+# pytest==7.4.3
+# pytest-kivy==0.1.0
