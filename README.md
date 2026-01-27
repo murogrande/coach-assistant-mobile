@@ -12,9 +12,9 @@ This mobile app helps you:
 
 ## Technology Stack
 
-- **Framework**: KivyMD 2.x
-- **UI Library**: Kivy 2.x
-- **Platform**: Android
+- **Framework**: KivyMD 2.0 (Material Design 3)
+- **UI Library**: Kivy 2.3+
+- **Platform**: Android via Buildozer
 - **Backend**: Django REST API
 - **Language**: Python 3.10+
 
@@ -24,43 +24,34 @@ This mobile app helps you:
 coach-assistant-mobile/
 ├── main.py                 # App entry point
 ├── screens/                # UI screens
-│   ├── login.py
-│   ├── home.py
-│   ├── goals.py
-│   ├── journal.py
-│   └── analysis.py
-├── services/               # Backend communication
-│   └── api_client.py
-├── utils/                  # Helper functions
-├── assets/                 # Images, fonts, etc.
-├── buildozer.spec          # Android build configuration
-└── requirements.txt        # Python dependencies
+│   ├── login.py            # Login/authentication
+│   ├── home.py             # Navigation hub
+│   ├── goals.py            # Weekly goals management
+│   ├── journal.py          # Daily journal entries
+│   └── analysis.py         # AI weekly analysis
+├── services/
+│   └── api_client.py       # REST API client
+├── tests/                  # Test suite
+├── assets/                 # Images, fonts, icons
+└── requirements.txt
 ```
 
-## Setup Instructions
+## Setup
 
-### 1. Prerequisites
+### Prerequisites
 
 - Python 3.10+
-- pip
-- For Android build: Buildozer (Linux) or Kivy Buildozer (Windows/Mac)
+- For Android build: Linux or WSL
 
-### 2. Installation
+### Installation
 
 ```bash
-# Clone the repository
-git clone <your-repo-url>
-cd coach-assistant-mobile
-
-# Create virtual environment
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Configuration
+### Configuration
 
 Edit `services/api_client.py` to set your backend API URL:
 
@@ -68,81 +59,53 @@ Edit `services/api_client.py` to set your backend API URL:
 API_BASE_URL = "http://your-backend-url:8000/api"
 ```
 
-### 4. Run on Desktop (Development)
+For testing on a phone, use your computer's local IP instead of localhost.
+
+### Run on Desktop
 
 ```bash
 python main.py
 ```
 
-### 5. Build for Android
+### Build for Android
 
 ```bash
-# Install buildozer (Linux only)
 pip install buildozer
-
-# Initialize buildozer
 buildozer init
-
-# Build APK (first build takes ~30 minutes)
 buildozer -v android debug
-
-# Deploy to connected device
 buildozer android deploy run
 ```
 
-## Features
-
-### Current Features (POC)
-- ✅ User registration and login
-- ✅ Create and manage weekly goals
-- ✅ Mark goals as complete
-- ✅ Write daily journal entries
-- ✅ Generate AI-powered weekly analysis
-- ✅ View analysis results
-
-### Planned Features
-- Edit/delete goals and journal entries
-- View past analyses
-- Calendar view for journal entries
-- Progress statistics
-- Notifications and reminders
-
-## Screenshots
-
-_Coming soon_
-
-## Backend Setup
-
-This mobile app requires the Coach Assistant Backend to be running. See the backend repository for setup instructions.
-
-## Development
-
-### Running Tests
+### Run Tests
 
 ```bash
-python -m pytest tests/
+python -m pytest tests/ -v
 ```
 
-### Code Style
+## Current Status
 
-This project follows PEP 8 style guidelines.
+### Implemented
+- Basic app structure with navigation
+- Login, Home, Goals, Journal, and Analysis screens
+- API client with auth, goals, journal, and analysis endpoints
+- Test suite (20 tests)
+
+### Pending
+- Connect screens to API client
+- Form validation and error handling
+- Edit/delete functionality
+- Calendar view for journal entries
 
 ## Troubleshooting
 
-### Common Issues
-
 **"Connection refused" error**
 - Ensure the backend API is running
-- Check the API_BASE_URL in `services/api_client.py`
-- If testing on phone, use your computer's local IP (not localhost)
+- Check API_BASE_URL in `services/api_client.py`
+- Use your computer's local IP when testing on phone
 
 **Buildozer errors**
-- Make sure you're on Linux (or use WSL on Windows)
-- Install dependencies: `sudo apt-get install -y python3-pip build-essential git python3-dev`
-
-## Contributing
-
-This is a personal project, but suggestions are welcome!
+- Ensure you're on Linux or WSL
+- Install: `sudo apt-get install -y python3-pip build-essential git python3-dev`
 
 ## License
 
@@ -151,8 +114,3 @@ Private - All rights reserved
 ## Author
 
 Mauro Grande
-
-## Acknowledgments
-
-- KivyMD team for the amazing UI framework
-- OpenAI for GPT-5.1 API
