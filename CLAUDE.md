@@ -27,6 +27,13 @@ buildozer android deploy run
 **Run tests:**
 ```bash
 python -m pytest tests/
+python -m pytest tests/ -q   # quiet
+python -m pytest tests/ -v   # verbose
+```
+
+**Screenshot (for UI debugging):**
+```bash
+import -window root /tmp/screenshot.png
 ```
 
 ## Architecture
@@ -34,17 +41,18 @@ python -m pytest tests/
 KivyMD mobile app (Python) connecting to a Django REST backend for personal coaching and goal tracking.
 
 ### Tech Stack
-- **UI Framework**: KivyMD 2.0.1.dev0 (Material Design 3) on Kivy 2.3.0
+- **UI Framework**: KivyMD 2.0.1.dev0 (Material Design 3) on Kivy 2.3.1
 - **HTTP Client**: requests
-- **Backend**: Django REST API (separate repository)
+- **Backend**: Django REST API (separate repository: `coach-assistant-backend`)
 - **Target Platform**: Android via Buildozer
 
 ### Code Structure
 
-- `main.py` - App entry point with `CoachAssistantApp(MDApp)` class; configures theme (Blue/Light) and ScreenManager
+- `main.py` - App entry point with `CoachAssistantApp(MDApp)` class; configures theme (Blue/Teal/Light) and ScreenManager
 - `screens/` - UI screens (login, home, goals, journal, analysis)
 - `services/api_client.py` - REST client singleton handling auth (Bearer token), goals, journal, and analysis endpoints
 - `utils/` - Helper functions
+- `tests/` - pytest tests with KivyMD headless setup in `conftest.py`
 
 ### API Client
 
@@ -57,3 +65,41 @@ Methods:
 - Analysis: `generate_analysis()`, `get_latest_analysis()`
 
 **Backend URL**: Set `APIClient.API_BASE_URL` in `services/api_client.py`. For phone testing, use your computer's local IP instead of localhost.
+
+**Token format**: Backend returns `tokens.access` and `tokens.refresh` (not `token`). Use `Authorization: Bearer <access_token>`.
+
+## KivyMD 2.x Quirks
+
+- **Full-width buttons**: `MDButton` requires `theme_width="Custom"` + `size_hint_x=1` to fill parent width. `size_hint_x=1` alone does not work.
+- **TextField icons**: Use child widgets, not constructor args:
+  ```python
+  field.add_widget(MDTextFieldLeadingIcon(icon="account"))
+  ```
+- **`adaptive_width`** and **`leading_icon`** are NOT valid constructor parameters for MDButton/MDTextField in this version.
+- **Threading**: API calls must run in background threads. Use `threading.Thread` + `Clock.schedule_once` to update UI from the main thread.
+
+## Issue Progress
+
+| Issue | Title | Status |
+|-------|-------|--------|
+| #1 | Setup KivyMD Project Configuration | ✅ Done |
+| #2 | Implement Login Screen UI | ✅ Done |
+| #3 | Implement Authentication Logic | 🔲 Next |
+| #4 | Create Home/Dashboard Screen | 🔲 Pending |
+| #5 | Implement Weekly Goals Screen UI | 🔲 Pending |
+| #6 | Implement Goals API Integration | 🔲 Pending |
+| #7 | Implement Daily Journal Screen UI | 🔲 Pending |
+| #8 | Implement Journal API Integration | 🔲 Pending |
+| #9 | Implement Weekly Analysis Screen UI | 🔲 Pending |
+| #10 | Implement Analysis API Integration | 🔲 Pending |
+| #15 | Setup Buildozer for Android Build | 🔲 Pending |
+| #16 | Test on Android Device | 🔲 Pending |
+
+**Milestone "POC Ready"** = Issues #1–10, then #15–16 to get on phone.
+
+## Testing Guidelines
+
+- Always mock API calls using `unittest.mock.patch`
+- Use the `screen_manager` fixture from `conftest.py` for screen tests
+- Tests run headlessly (SDL dummy driver configured in `conftest.py`)
+- 29 tests currently passing

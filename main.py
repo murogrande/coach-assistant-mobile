@@ -27,7 +27,6 @@ class CoachAssistantApp(MDApp):
         # Screen manager
         sm = ScreenManager()
 
-        # Add screens
         sm.add_widget(LoginScreen(name="login"))
         sm.add_widget(HomeScreen(name="home"))
         sm.add_widget(GoalsScreen(name="goals"))
