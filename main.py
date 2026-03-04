@@ -21,6 +21,7 @@ class CoachAssistantApp(MDApp):
     def build(self):
         """Build and return the root widget"""
         self.theme_cls.primary_palette = "Blue"
+        self.theme_cls.accent_palette = "Teal"
         self.theme_cls.theme_style = "Light"
 
         # Screen manager
