@@ -2,9 +2,63 @@
 
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.button import MDButton, MDButtonText
+from kivymd.uix.scrollview import MDScrollView
+from kivymd.uix.button import MDButton, MDButtonText, MDIconButton
 from kivymd.uix.label import MDLabel
-from kivymd.uix.list import MDList, MDListItem, MDListItemHeadlineText
+from kivymd.uix.card import MDCard
+from kivymd.uix.selectioncontrol import MDCheckbox
+
+
+BLUE = (0.129, 0.588, 0.953, 1)
+WHITE = (1, 1, 1, 1)
+WHITE_DIM = (1, 1, 1, 0.85)
+BG = (0.96, 0.96, 0.96, 1)
+
+# Placeholder goals until API is connected (Issue #6)
+_PLACEHOLDER_GOALS = [
+    "Exercise for 30 minutes every day",
+    "Read 20 pages of a book",
+    "Drink 8 glasses of water",
+]
+
+
+class GoalCard(MDCard):
+    """Card representing a single goal with a checkbox"""
+
+    def __init__(self, goal_text: str, completed: bool = False, **kwargs):
+        super().__init__(
+            orientation="horizontal",
+            padding=[16, 14, 16, 14],
+            spacing=12,
+            size_hint=(1, None),
+            height=72,
+            elevation=1,
+            style="elevated",
+            **kwargs,
+        )
+        self.completed = completed
+
+        self.checkbox = MDCheckbox(
+            size_hint=(None, None),
+            size=(36, 36),
+            pos_hint={"center_y": 0.5},
+            active=completed,
+        )
+        self.checkbox.bind(active=self.on_checkbox_change)
+        self.add_widget(self.checkbox)
+
+        self.goal_label = MDLabel(
+            text=goal_text,
+            font_style="Body",
+            role="large",
+            theme_text_color="Secondary" if completed else "Primary",
+            adaptive_height=True,
+            pos_hint={"center_y": 0.5},
+        )
+        self.add_widget(self.goal_label)
+
+    def on_checkbox_change(self, instance, value):
+        self.goal_label.theme_text_color = "Secondary" if value else "Primary"
 
 
 class GoalsScreen(MDScreen):
@@ -15,68 +69,93 @@ class GoalsScreen(MDScreen):
         self.build_ui()
 
     def build_ui(self):
-        layout = MDBoxLayout(
-            orientation="vertical",
-            padding=20,
-            spacing=10,
-        )
+        root = MDBoxLayout(orientation="vertical")
 
-        # Header with back button
+        # --- Header ---
         header = MDBoxLayout(
-            orientation="horizontal",
-            size_hint_y=None,
-            height=50,
-            spacing=10,
+            orientation="vertical",
+            size_hint=(1, None),
+            height=130,
+            padding=[16, 28, 16, 16],
+            spacing=4,
+            md_bg_color=BLUE,
         )
-
-        back_btn = MDButton(
-            style="text",
+        top_row = MDBoxLayout(
+            orientation="horizontal",
+            adaptive_height=True,
+            spacing=4,
+        )
+        back_btn = MDIconButton(
+            icon="arrow-left",
+            theme_icon_color="Custom",
+            icon_color=WHITE,
             on_release=lambda x: self.go_back(),
         )
-        back_btn.add_widget(MDButtonText(text="< Back"))
-        header.add_widget(back_btn)
-
-        title = MDLabel(
-            text="Weekly Goals",
-            halign="center",
+        top_row.add_widget(back_btn)
+        top_row.add_widget(MDLabel(
+            text="My Goals",
             font_style="Headline",
+            role="small",
+            theme_text_color="Custom",
+            text_color=WHITE,
+            adaptive_height=True,
+            pos_hint={"center_y": 0.5},
+        ))
+        header.add_widget(top_row)
+        header.add_widget(MDLabel(
+            text="This week's targets",
+            font_style="Body",
+            role="medium",
+            theme_text_color="Custom",
+            text_color=WHITE_DIM,
+            adaptive_height=True,
+        ))
+        root.add_widget(header)
+
+        # --- Content ---
+        content_bg = MDBoxLayout(orientation="vertical", md_bg_color=BG)
+
+        scroll = MDScrollView()
+        self.goals_list = MDBoxLayout(
+            orientation="vertical",
+            padding=[16, 16, 16, 16],
+            spacing=12,
+            adaptive_height=True,
         )
-        header.add_widget(title)
+        for goal_text in _PLACEHOLDER_GOALS:
+            self.goals_list.add_widget(GoalCard(goal_text=goal_text))
 
-        layout.add_widget(header)
+        scroll.add_widget(self.goals_list)
+        content_bg.add_widget(scroll)
 
-        # Goals list placeholder
-        self.goals_list = MDList()
-
-        # Placeholder items
-        for i in range(3):
-            item = MDListItem()
-            item.add_widget(MDListItemHeadlineText(text=f"Goal {i + 1} - Tap to edit"))
-            self.goals_list.add_widget(item)
-
-        layout.add_widget(self.goals_list)
-
-        # Add goal button
+        # --- Footer ---
+        footer = MDBoxLayout(
+            orientation="vertical",
+            size_hint=(1, None),
+            height=80,
+            padding=[16, 12, 16, 12],
+            md_bg_color=BG,
+        )
         add_btn = MDButton(
             style="filled",
-            pos_hint={"center_x": 0.5},
+            theme_width="Custom",
+            size_hint_x=1,
             on_release=self.add_goal,
         )
         add_btn.add_widget(MDButtonText(text="Add Goal"))
-        layout.add_widget(add_btn)
+        footer.add_widget(add_btn)
 
-        self.add_widget(layout)
+        root.add_widget(content_bg)
+        root.add_widget(footer)
+        self.add_widget(root)
 
     def go_back(self):
-        """Return to home screen"""
         self.manager.current = "home"
 
     def add_goal(self, *args):
-        """Add a new goal"""
-        # TODO: Implement add goal dialog
+        # TODO: Implement add goal dialog (Issue #6)
         pass
 
     def load_goals(self):
-        """Load goals from API"""
-        # TODO: Call api_client.get_goals()
+        # TODO: Call api_client.get_goals() (Issue #6)
         pass

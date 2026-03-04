@@ -2,8 +2,12 @@
 API Client for communicating with Django backend
 """
 
+import os
+import json
 import requests
 from typing import Optional, Dict, List
+
+TOKEN_FILE = os.path.join(os.path.expanduser("~"), ".coach_assistant_token.json")
 
 
 class APIClient:
@@ -46,8 +50,11 @@ class APIClient:
         response.raise_for_status()
 
         result = response.json()
-        self.token = result.get("token")
+        # Backend returns tokens.access (JWT) or token (simple)
+        tokens_obj = result.get("tokens", {})
+        self.token = tokens_obj.get("access") or result.get("token")
         self._update_auth_header()
+        self.save_token()
 
         return result
 
@@ -74,6 +81,37 @@ class APIClient:
         response.raise_for_status()
 
         return response.json()
+
+    def save_token(self):
+        """Persist the current access token to disk"""
+        if self.token:
+            with open(TOKEN_FILE, "w") as f:
+                json.dump({"access_token": self.token}, f)
+
+    def load_token(self) -> Optional[str]:
+        """Load persisted token from disk and set auth header"""
+        if os.path.exists(TOKEN_FILE):
+            try:
+                with open(TOKEN_FILE) as f:
+                    data = json.load(f)
+                self.token = data.get("access_token")
+                if self.token:
+                    self._update_auth_header()
+                    return self.token
+            except (json.JSONDecodeError, KeyError):
+                pass
+        return None
+
+    def logout(self):
+        """Clear token from memory and disk"""
+        self.token = None
+        self.headers.pop("Authorization", None)
+        if os.path.exists(TOKEN_FILE):
+            os.remove(TOKEN_FILE)
+
+    def is_authenticated(self) -> bool:
+        """Return True if a token is currently set"""
+        return bool(self.token)
 
     # Goals endpoints
     def get_goals(self) -> List[Dict]:
