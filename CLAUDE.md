@@ -85,17 +85,26 @@ Methods:
 | #1 | Setup KivyMD Project Configuration | ✅ Done |
 | #2 | Implement Login Screen UI | ✅ Done |
 | #3 | Implement Authentication Logic | ✅ Done |
-| #4 | Create Home/Dashboard Screen | ✅ Done |
-| #5 | Implement Weekly Goals Screen UI | ✅ Done |
-| #6 | Implement Goals API Integration | 🔲 Next |
-| #7 | Implement Daily Journal Screen UI | ✅ Done |
-| #8 | Implement Journal API Integration | 🔲 Next |
-| #9 | Implement Weekly Analysis Screen UI | ✅ Done |
-| #10 | Implement Analysis API Integration | 🔲 Next |
+| #4 | Create Home/Dashboard Screen | 🔶 Partial |
+| #5 | Implement Weekly Goals Screen UI | 🔶 Partial |
+| #6 | Implement Goals API Integration | 🔲 Pending |
+| #7 | Implement Daily Journal Screen UI | 🔶 Partial |
+| #8 | Implement Journal API Integration | 🔲 Pending |
+| #9 | Implement Weekly Analysis Screen UI | 🔶 Partial |
+| #10 | Implement Analysis API Integration | 🔲 Pending |
 | #15 | Setup Buildozer for Android Build | 🔲 Pending |
 | #16 | Test on Android Device | 🔲 Pending |
 
 **Milestone "POC Ready"** = Issues #1–10, then #15–16 to get on phone.
+
+### Partial UI progress (screens redesigned but not feature-complete)
+
+| Issue | Done | Missing |
+|-------|------|---------|
+| #4 Home | Layout, nav cards, navigation | Pull-to-refresh, user info/stats |
+| #5 Goals | Layout, cards, checkboxes | Add goal dialog, swipe to delete |
+| #7 Journal | Layout, text area, date display | Date selector/navigation, load existing entries, discard confirmation |
+| #9 Analysis | Layout, scrollable content, empty state, generate button | Week selector, analysis sections, loading state, share button |
 
 ## Authentication (Issue #3)
 
