@@ -4,8 +4,15 @@ Main entry point for the KivyMD application
 """
 
 from kivymd.app import MDApp
-from kivy.lang import Builder
-from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.screenmanager import ScreenManager
+
+from screens import (
+    LoginScreen,
+    HomeScreen,
+    GoalsScreen,
+    JournalScreen,
+    AnalysisScreen,
+)
 
 
 class CoachAssistantApp(MDApp):
@@ -14,17 +21,18 @@ class CoachAssistantApp(MDApp):
     def build(self):
         """Build and return the root widget"""
         self.theme_cls.primary_palette = "Blue"
+        self.theme_cls.accent_palette = "Teal"
         self.theme_cls.theme_style = "Light"
 
         # Screen manager
         sm = ScreenManager()
 
-        # Add screens (will be implemented later)
-        # sm.add_widget(LoginScreen(name='login'))
-        # sm.add_widget(HomeScreen(name='home'))
-        # sm.add_widget(GoalsScreen(name='goals'))
-        # sm.add_widget(JournalScreen(name='journal'))
-        # sm.add_widget(AnalysisScreen(name='analysis'))
+        # Add screens
+        sm.add_widget(LoginScreen(name="login"))
+        sm.add_widget(HomeScreen(name="home"))
+        sm.add_widget(GoalsScreen(name="goals"))
+        sm.add_widget(JournalScreen(name="journal"))
+        sm.add_widget(AnalysisScreen(name="analysis"))
 
         return sm
 
@@ -33,5 +41,5 @@ class CoachAssistantApp(MDApp):
         print("Coach Assistant App started")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     CoachAssistantApp().run()
