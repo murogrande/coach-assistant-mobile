@@ -33,7 +33,7 @@ coach-assistant-mobile/
 │   └── api_client.py       # REST API client singleton (auth, goals, journal, analysis)
 ├── utils/                  # Helper functions
 ├── assets/                 # Images, fonts, icons
-├── tests/                  # Test suite (41 tests)
+├── tests/                  # Test suite (45 tests)
 └── requirements.txt
 ```
 
@@ -92,10 +92,10 @@ python -m pytest tests/ -v      # verbose
 - ✅ **Issue #1** — App structure, theme (Blue/Teal), ScreenManager, navigation
 - ✅ **Issue #2** — Login screen UI: hero header, form card, field icons, validation, register toggle, password visibility toggle
 - ✅ **Issue #3** — Authentication logic: login/register API calls (threaded), JWT token persistence, auto-login on start, error messages
+- ✅ **Issue #4** — Home dashboard: greeting, username, stats cards (goals/journal), refresh button, navigation cards
 
 ### In Progress / Next
-- 🔲 **Issue #4** — Home/Dashboard screen
-- 🔲 **Issue #5–6** — Goals screen UI + API integration
+- 🔶 **Issue #5–6** — Goals screen UI + API integration
 - 🔲 **Issue #7–8** — Journal screen UI + API integration
 - 🔲 **Issue #9–10** — Analysis screen UI + API integration
 - 🔲 **Issue #15–16** — Buildozer Android build + device testing
