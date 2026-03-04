@@ -264,6 +264,60 @@ class TestHomeScreen:
         home.navigate("goals")
         assert screen_manager.current == "goals"
 
+    def test_home_screen_has_stats(self, screen_manager):
+        """Test HomeScreen has goals and journal stat cards"""
+        from screens.home import HomeScreen
+
+        home = HomeScreen(name="home")
+        screen_manager.add_widget(home)
+
+        assert hasattr(home, "goals_stat")
+        assert hasattr(home, "journal_stat")
+
+    def test_on_pre_enter_sets_username(self, screen_manager):
+        """Test on_pre_enter shows username from api_client"""
+        from screens.home import HomeScreen
+
+        home = HomeScreen(name="home")
+        screen_manager.add_widget(home)
+
+        with patch("screens.home.api_client") as mock_client, \
+             patch("screens.home.threading.Thread") as mock_thread:
+            mock_client.username = "testuser"
+            mock_thread.return_value = MagicMock()
+            home.on_pre_enter()
+
+        assert "testuser" in home.username_label.text
+
+    def test_update_stats_updates_labels(self, screen_manager):
+        """Test _update_stats sets stat card values"""
+        from screens.home import HomeScreen
+
+        home = HomeScreen(name="home")
+        screen_manager.add_widget(home)
+
+        home._update_stats("3/5", "7")
+
+        assert home.goals_stat.value_label.text == "3/5"
+        assert home.journal_stat.value_label.text == "7"
+
+    def test_do_logout_clears_token_and_navigates(self, screen_manager):
+        """Test do_logout calls api_client.logout and goes to login"""
+        from screens.home import HomeScreen
+        from screens.login import LoginScreen
+
+        home = HomeScreen(name="home")
+        login = LoginScreen(name="login")
+        screen_manager.add_widget(login)
+        screen_manager.add_widget(home)
+        screen_manager.current = "home"
+
+        with patch("screens.home.api_client") as mock_client:
+            home.do_logout()
+            mock_client.logout.assert_called_once()
+
+        assert screen_manager.current == "login"
+
 
 class TestGoalsScreen:
     """Tests for GoalsScreen"""
