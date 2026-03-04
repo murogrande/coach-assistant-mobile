@@ -37,6 +37,116 @@ class TestLoginScreen:
         assert screen.password_field is not None
         assert screen.password_field.password is True
 
+    def test_login_screen_has_error_label(self, screen_manager):
+        """Test LoginScreen has an error label"""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login")
+        screen_manager.add_widget(screen)
+
+        assert hasattr(screen, "error_label")
+        assert screen.error_label.text == ""
+
+    def test_show_error_displays_message(self, screen_manager):
+        """Test show_error sets error label text"""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login")
+        screen_manager.add_widget(screen)
+
+        screen.show_error("Invalid credentials")
+        assert screen.error_label.text == "Invalid credentials"
+
+    def test_clear_error_resets_message(self, screen_manager):
+        """Test clear_error resets error label"""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login")
+        screen_manager.add_widget(screen)
+
+        screen.show_error("Some error")
+        screen.clear_error()
+        assert screen.error_label.text == ""
+
+    def test_validate_empty_username(self, screen_manager):
+        """Test validation fails with empty username"""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login")
+        screen_manager.add_widget(screen)
+
+        screen.username_field.text = ""
+        screen.password_field.text = "password123"
+        result = screen.validate()
+
+        assert result is False
+        assert "Username" in screen.error_label.text
+
+    def test_validate_empty_password(self, screen_manager):
+        """Test validation fails with empty password"""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login")
+        screen_manager.add_widget(screen)
+
+        screen.username_field.text = "testuser"
+        screen.password_field.text = ""
+        result = screen.validate()
+
+        assert result is False
+        assert "Password" in screen.error_label.text
+
+    def test_validate_short_password(self, screen_manager):
+        """Test validation fails with password under 6 characters"""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login")
+        screen_manager.add_widget(screen)
+
+        screen.username_field.text = "testuser"
+        screen.password_field.text = "abc"
+        result = screen.validate()
+
+        assert result is False
+        assert "6 characters" in screen.error_label.text
+
+    def test_validate_success(self, screen_manager):
+        """Test validation passes with valid inputs"""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login")
+        screen_manager.add_widget(screen)
+
+        screen.username_field.text = "testuser"
+        screen.password_field.text = "password123"
+        result = screen.validate()
+
+        assert result is True
+
+    def test_toggle_mode_switches_to_register(self, screen_manager):
+        """Test toggle_mode switches to register mode"""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login")
+        screen_manager.add_widget(screen)
+
+        assert screen.is_register_mode is False
+        screen.toggle_mode()
+        assert screen.is_register_mode is True
+        assert screen.form_title.text == "Create Account"
+
+    def test_toggle_mode_switches_back_to_login(self, screen_manager):
+        """Test toggle_mode switches back to login mode"""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login")
+        screen_manager.add_widget(screen)
+
+        screen.toggle_mode()
+        screen.toggle_mode()
+        assert screen.is_register_mode is False
+        assert screen.form_title.text == "Sign In"
+
 
 class TestHomeScreen:
     """Tests for HomeScreen"""

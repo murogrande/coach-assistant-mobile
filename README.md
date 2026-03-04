@@ -12,27 +12,28 @@ This mobile app helps you:
 
 ## Technology Stack
 
-- **Framework**: KivyMD 2.0 (Material Design 3)
-- **UI Library**: Kivy 2.3+
+- **Framework**: KivyMD 2.0.1.dev0 (Material Design 3)
+- **UI Library**: Kivy 2.3.1
 - **Platform**: Android via Buildozer
-- **Backend**: Django REST API
+- **Backend**: Django REST API (`coach-assistant-backend`)
 - **Language**: Python 3.10+
 
 ## Project Structure
 
 ```
 coach-assistant-mobile/
-├── main.py                 # App entry point
+├── main.py                 # App entry point, theme, ScreenManager
 ├── screens/                # UI screens
-│   ├── login.py            # Login/authentication
+│   ├── login.py            # Login + Register UI with validation
 │   ├── home.py             # Navigation hub
 │   ├── goals.py            # Weekly goals management
 │   ├── journal.py          # Daily journal entries
-│   └── analysis.py         # AI weekly analysis
+│   └── analysis.py         # AI weekly analysis display
 ├── services/
-│   └── api_client.py       # REST API client
-├── tests/                  # Test suite
+│   └── api_client.py       # REST API client singleton
+├── utils/                  # Helper functions
 ├── assets/                 # Images, fonts, icons
+├── tests/                  # Test suite (29 tests)
 └── requirements.txt
 ```
 
@@ -72,7 +73,7 @@ python main.py
 ```bash
 pip install buildozer
 buildozer init
-buildozer -v android debug
+buildozer -v android debug       # First build takes ~30 minutes
 buildozer android deploy run
 ```
 
@@ -84,27 +85,41 @@ python -m pytest tests/ -v
 
 ## Current Status
 
-### Implemented
-- Basic app structure with navigation
-- Login, Home, Goals, Journal, and Analysis screens
-- API client with auth, goals, journal, and analysis endpoints
-- Test suite (20 tests)
+### Done
+- ✅ **Issue #1** — App structure, theme (Blue/Teal), ScreenManager, navigation
+- ✅ **Issue #2** — Login screen UI: hero header, form card, icons in fields, validation, error messages, register toggle
 
-### Pending
-- Connect screens to API client
-- Form validation and error handling
-- Edit/delete functionality
-- Calendar view for journal entries
+### In Progress / Next
+- 🔲 **Issue #3** — Authentication logic (connect to backend API, token storage, auto-login)
+- 🔲 **Issue #4** — Home/Dashboard screen
+- 🔲 **Issue #5-6** — Goals screen UI + API integration
+- 🔲 **Issue #7-8** — Journal screen UI + API integration
+- 🔲 **Issue #9-10** — Analysis screen UI + API integration
+- 🔲 **Issue #15-16** — Buildozer Android build + device testing
+
+**Milestone "POC Ready"** = Issues #1–10, then #15–16 to get on phone.
+
+## Screenshots
+
+_Coming soon_
+
+## Backend
+
+This app requires the `coach-assistant-backend` Django REST API. See that repository for setup instructions. The backend exposes:
+- `POST /api/auth/login/` and `/api/auth/register/`
+- `GET/POST /api/goals/`
+- `GET/POST /api/journal/`
+- `POST /api/analysis/generate/`, `GET /api/analysis/latest/`
 
 ## Troubleshooting
 
 **"Connection refused" error**
-- Ensure the backend API is running
-- Check API_BASE_URL in `services/api_client.py`
-- Use your computer's local IP when testing on phone
+- Ensure the backend API is running (`python manage.py runserver`)
+- Check `API_BASE_URL` in `services/api_client.py`
+- Use your computer's local IP when testing on phone (not `localhost`)
 
 **Buildozer errors**
-- Ensure you're on Linux or WSL
+- Must be on Linux or WSL
 - Install: `sudo apt-get install -y python3-pip build-essential git python3-dev`
 
 ## License
@@ -114,3 +129,8 @@ Private - All rights reserved
 ## Author
 
 Mauro Grande
+
+## Acknowledgments
+
+- KivyMD team for the UI framework
+- OpenAI for GPT-5.2 API (used in backend analysis)

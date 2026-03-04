@@ -1,11 +1,11 @@
-"""Login Screen"""
+"""Login Screen - Issue #2: Login Screen UI"""
 
-from kivy.uix.screenmanager import Screen
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.textfield import MDTextField
+from kivymd.uix.textfield import MDTextField, MDTextFieldLeadingIcon
 from kivymd.uix.button import MDButton, MDButtonText
 from kivymd.uix.label import MDLabel
+from kivymd.uix.card import MDCard
 
 
 class LoginScreen(MDScreen):
@@ -13,72 +13,186 @@ class LoginScreen(MDScreen):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.is_register_mode = False
         self.build_ui()
 
     def build_ui(self):
-        layout = MDBoxLayout(
+        # Root layout
+        root = MDBoxLayout(orientation="vertical")
+
+        # --- Hero header ---
+        self.header = MDBoxLayout(
             orientation="vertical",
-            padding=40,
-            spacing=20,
-            pos_hint={"center_x": 0.5, "center_y": 0.5},
-            size_hint=(0.8, None),
-            height=400,
+            size_hint=(1, 0.38),
+            padding=[40, 40, 40, 20],
+            spacing=8,
+            md_bg_color=(0.129, 0.588, 0.953, 1),  # Blue 500
         )
 
-        # Title
         title = MDLabel(
             text="Coach Assistant",
             halign="center",
             font_style="Display",
+            role="small",
+            theme_text_color="Custom",
+            text_color=(1, 1, 1, 1),
         )
-        layout.add_widget(title)
+        subtitle = MDLabel(
+            text="Your personal AI coach",
+            halign="center",
+            font_style="Body",
+            role="large",
+            theme_text_color="Custom",
+            text_color=(1, 1, 1, 0.85),
+        )
+        self.header.add_widget(title)
+        self.header.add_widget(subtitle)
+        root.add_widget(self.header)
 
-        # Username field
+        # --- Form area ---
+        form_area = MDBoxLayout(
+            orientation="vertical",
+            size_hint=(1, 0.62),
+            padding=[24, 16, 24, 24],
+            md_bg_color=(0.96, 0.96, 0.96, 1),
+        )
+
+        # Card fills the form area
+        card = MDCard(
+            orientation="vertical",
+            padding=[28, 24, 28, 24],
+            spacing=14,
+            size_hint=(1, 1),
+            elevation=2,
+            style="elevated",
+        )
+
+        self.form_title = MDLabel(
+            text="Sign In",
+            halign="center",
+            font_style="Title",
+            role="large",
+            size_hint_y=None,
+            height=36,
+        )
+        card.add_widget(self.form_title)
+
         self.username_field = MDTextField(
             mode="outlined",
+            hint_text="Username",
             size_hint_x=1,
         )
-        self.username_field.hint_text = "Username"
-        layout.add_widget(self.username_field)
+        self.username_field.add_widget(MDTextFieldLeadingIcon(icon="account"))
+        card.add_widget(self.username_field)
 
-        # Password field
         self.password_field = MDTextField(
             mode="outlined",
+            hint_text="Password",
             password=True,
             size_hint_x=1,
         )
-        self.password_field.hint_text = "Password"
-        layout.add_widget(self.password_field)
+        self.password_field.add_widget(MDTextFieldLeadingIcon(icon="lock"))
+        card.add_widget(self.password_field)
 
-        # Login button
-        login_btn = MDButton(
+        # Error label
+        self.error_label = MDLabel(
+            text="",
+            halign="center",
+            font_style="Body",
+            role="medium",
+            theme_text_color="Custom",
+            text_color=(0.8, 0.1, 0.1, 1),
+            size_hint_y=None,
+            height=24,
+        )
+        card.add_widget(self.error_label)
+
+        # Primary action button
+        self.action_btn = MDButton(
             style="filled",
-            pos_hint={"center_x": 0.5},
-            on_release=self.do_login,
+            theme_width="Custom",
+            size_hint_x=1,
+            on_release=self.do_action,
         )
-        login_btn.add_widget(MDButtonText(text="Login"))
-        layout.add_widget(login_btn)
+        self.action_btn_text = MDButtonText(text="Login")
+        self.action_btn.add_widget(self.action_btn_text)
+        card.add_widget(self.action_btn)
 
-        # Register button
-        register_btn = MDButton(
-            style="outlined",
-            pos_hint={"center_x": 0.5},
-            on_release=self.go_to_register,
+        # Toggle register / login
+        self.toggle_btn = MDButton(
+            style="text",
+            theme_width="Custom",
+            size_hint_x=1,
+            on_release=self.toggle_mode,
         )
-        register_btn.add_widget(MDButtonText(text="Register"))
-        layout.add_widget(register_btn)
+        self.toggle_btn_text = MDButtonText(
+            text="Don't have an account? Register"
+        )
+        self.toggle_btn.add_widget(self.toggle_btn_text)
+        card.add_widget(self.toggle_btn)
 
-        self.add_widget(layout)
+        form_area.add_widget(card)
+        root.add_widget(form_area)
+        self.add_widget(root)
 
-    def do_login(self, *args):
-        """Handle login button press"""
-        username = self.username_field.text
+    # ------------------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------------------
+
+    def validate(self):
+        username = self.username_field.text.strip()
         password = self.password_field.text
-        if username and password:
-            # TODO: Call api_client.login()
-            self.manager.current = "home"
 
-    def go_to_register(self, *args):
-        """Navigate to register screen"""
-        # TODO: Implement register screen
-        pass
+        if not username:
+            self.show_error("Username is required")
+            return False
+        if not password:
+            self.show_error("Password is required")
+            return False
+        if len(password) < 6:
+            self.show_error("Password must be at least 6 characters")
+            return False
+        return True
+
+    # ------------------------------------------------------------------
+    # UI helpers
+    # ------------------------------------------------------------------
+
+    def show_error(self, message):
+        self.error_label.text = message
+
+    def clear_error(self):
+        self.error_label.text = ""
+
+    def toggle_mode(self, *args):
+        self.is_register_mode = not self.is_register_mode
+        self.clear_error()
+        if self.is_register_mode:
+            self.form_title.text = "Create Account"
+            self.action_btn_text.text = "Register"
+            self.toggle_btn_text.text = "Already have an account? Sign In"
+        else:
+            self.form_title.text = "Sign In"
+            self.action_btn_text.text = "Login"
+            self.toggle_btn_text.text = "Don't have an account? Register"
+
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
+
+    def do_action(self, *args):
+        self.clear_error()
+        if not self.validate():
+            return
+        if self.is_register_mode:
+            self.do_register()
+        else:
+            self.do_login()
+
+    def do_login(self):
+        # TODO: Call api_client.login() - Issue #3
+        self.manager.current = "home"
+
+    def do_register(self):
+        # TODO: Call api_client.register() - Issue #3
+        self.manager.current = "home"
