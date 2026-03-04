@@ -84,22 +84,30 @@ Methods:
 |-------|-------|--------|
 | #1 | Setup KivyMD Project Configuration | ✅ Done |
 | #2 | Implement Login Screen UI | ✅ Done |
-| #3 | Implement Authentication Logic | 🔲 Next |
-| #4 | Create Home/Dashboard Screen | 🔲 Pending |
-| #5 | Implement Weekly Goals Screen UI | 🔲 Pending |
-| #6 | Implement Goals API Integration | 🔲 Pending |
-| #7 | Implement Daily Journal Screen UI | 🔲 Pending |
-| #8 | Implement Journal API Integration | 🔲 Pending |
-| #9 | Implement Weekly Analysis Screen UI | 🔲 Pending |
-| #10 | Implement Analysis API Integration | 🔲 Pending |
+| #3 | Implement Authentication Logic | ✅ Done |
+| #4 | Create Home/Dashboard Screen | ✅ Done |
+| #5 | Implement Weekly Goals Screen UI | ✅ Done |
+| #6 | Implement Goals API Integration | 🔲 Next |
+| #7 | Implement Daily Journal Screen UI | ✅ Done |
+| #8 | Implement Journal API Integration | 🔲 Next |
+| #9 | Implement Weekly Analysis Screen UI | ✅ Done |
+| #10 | Implement Analysis API Integration | 🔲 Next |
 | #15 | Setup Buildozer for Android Build | 🔲 Pending |
 | #16 | Test on Android Device | 🔲 Pending |
 
 **Milestone "POC Ready"** = Issues #1–10, then #15–16 to get on phone.
+
+## Authentication (Issue #3)
+
+- `api_client.login()` extracts token from `tokens.access` (JWT) or fallback `token` field
+- Token saved to `~/.coach_assistant_token.json` via `save_token()` / `load_token()`
+- `main.py` `on_start()` calls `load_token()` → auto-navigates to home if token exists
+- API calls run in background threads; UI updates via `Clock.schedule_once`
+- `logout()` clears token from memory and deletes the file
 
 ## Testing Guidelines
 
 - Always mock API calls using `unittest.mock.patch`
 - Use the `screen_manager` fixture from `conftest.py` for screen tests
 - Tests run headlessly (SDL dummy driver configured in `conftest.py`)
-- 29 tests currently passing
+- 41 tests currently passing

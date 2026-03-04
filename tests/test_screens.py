@@ -1,6 +1,7 @@
 """Tests for screen modules"""
 
 import pytest
+from unittest.mock import patch, MagicMock
 
 
 class TestLoginScreen:
@@ -146,6 +147,96 @@ class TestLoginScreen:
         screen.toggle_mode()
         assert screen.is_register_mode is False
         assert screen.form_title.text == "Sign In"
+
+    def test_do_login_calls_api_and_navigates(self, screen_manager):
+        """Test do_login calls api_client.login and navigates to home on success"""
+        from screens.login import LoginScreen
+        from screens.home import HomeScreen
+
+        login = LoginScreen(name="login")
+        home = HomeScreen(name="home")
+        screen_manager.add_widget(login)
+        screen_manager.add_widget(home)
+
+        login.username_field.text = "testuser"
+        login.password_field.text = "password123"
+
+        with patch("screens.login.api_client") as mock_client, \
+             patch("screens.login.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            login.do_login()
+            mock_thread.assert_called_once()
+            assert login.action_btn.disabled is True
+
+    def test_do_login_shows_error_on_failure(self, screen_manager):
+        """Test _on_auth_error re-enables button and shows message"""
+        from screens.login import LoginScreen
+
+        login = LoginScreen(name="login")
+        screen_manager.add_widget(login)
+
+        login._on_auth_error("Invalid credentials")
+
+        assert login.action_btn.disabled is False
+        assert login.error_label.text == "Invalid credentials"
+
+    def test_on_auth_success_navigates_to_home(self, screen_manager):
+        """Test _on_auth_success navigates to home screen"""
+        from screens.login import LoginScreen
+        from screens.home import HomeScreen
+
+        login = LoginScreen(name="login")
+        home = HomeScreen(name="home")
+        screen_manager.add_widget(login)
+        screen_manager.add_widget(home)
+
+        login._on_auth_success()
+
+        assert screen_manager.current == "home"
+        assert login.action_btn.disabled is False
+
+    def test_parse_error_http_error_with_detail(self, screen_manager):
+        """Test _parse_error extracts detail from HTTPError response"""
+        import requests
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login")
+        screen_manager.add_widget(screen)
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"detail": "No active account found."}
+        mock_response.status_code = 401
+        err = requests.HTTPError(response=mock_response)
+
+        msg = screen._parse_error(err)
+        assert msg == "No active account found."
+
+    def test_parse_error_generic_exception(self, screen_manager):
+        """Test _parse_error returns str for generic exceptions"""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login")
+        screen_manager.add_widget(screen)
+
+        msg = screen._parse_error(ConnectionError("Network unreachable"))
+        assert "Network unreachable" in msg
+
+    def test_do_register_calls_api(self, screen_manager):
+        """Test do_register calls api in a thread"""
+        from screens.login import LoginScreen
+
+        login = LoginScreen(name="login")
+        screen_manager.add_widget(login)
+        login.toggle_mode()
+
+        login.username_field.text = "newuser"
+        login.password_field.text = "password123"
+
+        with patch("screens.login.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            login.do_register()
+            mock_thread.assert_called_once()
+            assert login.action_btn.disabled is True
 
 
 class TestHomeScreen:

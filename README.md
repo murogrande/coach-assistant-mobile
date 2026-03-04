@@ -8,7 +8,7 @@ This mobile app helps you:
 - Set and track weekly goals
 - Write daily journal entries
 - Get AI-powered weekly analysis and insights
-- Stay motivated with personalized coaching
+- Stay motivated with personalised coaching
 
 ## Technology Stack
 
@@ -22,18 +22,18 @@ This mobile app helps you:
 
 ```
 coach-assistant-mobile/
-├── main.py                 # App entry point, theme, ScreenManager
+├── main.py                 # App entry point, theme, ScreenManager, auto-login
 ├── screens/                # UI screens
-│   ├── login.py            # Login + Register UI with validation
-│   ├── home.py             # Navigation hub
+│   ├── login.py            # Login + Register UI, validation, auth logic
+│   ├── home.py             # Navigation dashboard
 │   ├── goals.py            # Weekly goals management
 │   ├── journal.py          # Daily journal entries
 │   └── analysis.py         # AI weekly analysis display
 ├── services/
-│   └── api_client.py       # REST API client singleton
+│   └── api_client.py       # REST API client singleton (auth, goals, journal, analysis)
 ├── utils/                  # Helper functions
 ├── assets/                 # Images, fonts, icons
-├── tests/                  # Test suite (29 tests)
+├── tests/                  # Test suite (41 tests)
 └── requirements.txt
 ```
 
@@ -54,13 +54,14 @@ pip install -r requirements.txt
 
 ### Configuration
 
-Edit `services/api_client.py` to set your backend API URL:
+Edit `services/api_client.py` to set your backend URL:
 
 ```python
-API_BASE_URL = "http://your-backend-url:8000/api"
+API_BASE_URL = "http://localhost:8000/api"          # desktop
+API_BASE_URL = "http://192.168.x.x:8000/api"       # phone on same WiFi
 ```
 
-For testing on a phone, use your computer's local IP instead of localhost.
+Find your local IP with: `ip addr show | grep "inet 192"`
 
 ### Run on Desktop
 
@@ -80,57 +81,57 @@ buildozer android deploy run
 ### Run Tests
 
 ```bash
-python -m pytest tests/ -v
+python -m pytest tests/
+python -m pytest tests/ -q      # quiet
+python -m pytest tests/ -v      # verbose
 ```
 
 ## Current Status
 
 ### Done
 - ✅ **Issue #1** — App structure, theme (Blue/Teal), ScreenManager, navigation
-- ✅ **Issue #2** — Login screen UI: hero header, form card, icons in fields, validation, error messages, register toggle
+- ✅ **Issue #2** — Login screen UI: hero header, form card, field icons, validation, register toggle, password visibility toggle
+- ✅ **Issue #3** — Authentication logic: login/register API calls (threaded), JWT token persistence, auto-login on start, error messages
 
 ### In Progress / Next
-- 🔲 **Issue #3** — Authentication logic (connect to backend API, token storage, auto-login)
 - 🔲 **Issue #4** — Home/Dashboard screen
-- 🔲 **Issue #5-6** — Goals screen UI + API integration
-- 🔲 **Issue #7-8** — Journal screen UI + API integration
-- 🔲 **Issue #9-10** — Analysis screen UI + API integration
-- 🔲 **Issue #15-16** — Buildozer Android build + device testing
+- 🔲 **Issue #5–6** — Goals screen UI + API integration
+- 🔲 **Issue #7–8** — Journal screen UI + API integration
+- 🔲 **Issue #9–10** — Analysis screen UI + API integration
+- 🔲 **Issue #15–16** — Buildozer Android build + device testing
 
 **Milestone "POC Ready"** = Issues #1–10, then #15–16 to get on phone.
 
-## Screenshots
+## Authentication Flow
 
-_Coming soon_
+1. App starts → checks `~/.coach_assistant_token.json` for a saved token
+2. If token found → navigates directly to Home (auto-login)
+3. If no token → shows Login screen
+4. Login/Register → calls backend API in a background thread → saves JWT access token on success
+5. Logout → clears token from memory and disk
 
 ## Backend
 
 This app requires the `coach-assistant-backend` Django REST API. See that repository for setup instructions. The backend exposes:
+
 - `POST /api/auth/login/` and `/api/auth/register/`
 - `GET/POST /api/goals/`
 - `GET/POST /api/journal/`
 - `POST /api/analysis/generate/`, `GET /api/analysis/latest/`
 
+Token format: `{ "tokens": { "access": "...", "refresh": "..." } }`
+
 ## Troubleshooting
 
 **"Connection refused" error**
-- Ensure the backend API is running (`python manage.py runserver`)
+- Ensure the backend is running (`python manage.py runserver`)
 - Check `API_BASE_URL` in `services/api_client.py`
-- Use your computer's local IP when testing on phone (not `localhost`)
+- Use your computer's local IP when testing on a phone (not `localhost`)
 
 **Buildozer errors**
 - Must be on Linux or WSL
-- Install: `sudo apt-get install -y python3-pip build-essential git python3-dev`
+- Install system deps: `sudo apt-get install -y python3-pip build-essential git python3-dev`
 
 ## License
 
-Private - All rights reserved
-
-## Author
-
-Mauro Grande
-
-## Acknowledgments
-
-- KivyMD team for the UI framework
-- OpenAI for GPT-5.2 API (used in backend analysis)
+Private — All rights reserved

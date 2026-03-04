@@ -1,10 +1,19 @@
 """Journal Screen"""
 
+import datetime
+
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.button import MDButton, MDButtonText
+from kivymd.uix.button import MDButton, MDButtonText, MDIconButton
 from kivymd.uix.label import MDLabel
+from kivymd.uix.card import MDCard
 from kivymd.uix.textfield import MDTextField
+
+
+BLUE = (0.129, 0.588, 0.953, 1)
+WHITE = (1, 1, 1, 1)
+WHITE_DIM = (1, 1, 1, 0.85)
+BG = (0.96, 0.96, 0.96, 1)
 
 
 class JournalScreen(MDScreen):
@@ -15,75 +24,109 @@ class JournalScreen(MDScreen):
         self.build_ui()
 
     def build_ui(self):
-        layout = MDBoxLayout(
-            orientation="vertical",
-            padding=20,
-            spacing=10,
-        )
+        root = MDBoxLayout(orientation="vertical")
 
-        # Header with back button
+        today = datetime.date.today()
+        date_str = today.strftime("%A, %B %d")
+
+        # --- Header ---
         header = MDBoxLayout(
-            orientation="horizontal",
-            size_hint_y=None,
-            height=50,
-            spacing=10,
+            orientation="vertical",
+            size_hint=(1, None),
+            height=130,
+            padding=[16, 28, 16, 16],
+            spacing=4,
+            md_bg_color=BLUE,
         )
-
-        back_btn = MDButton(
-            style="text",
+        top_row = MDBoxLayout(orientation="horizontal", adaptive_height=True, spacing=4)
+        back_btn = MDIconButton(
+            icon="arrow-left",
+            theme_icon_color="Custom",
+            icon_color=WHITE,
             on_release=lambda x: self.go_back(),
         )
-        back_btn.add_widget(MDButtonText(text="< Back"))
-        header.add_widget(back_btn)
-
-        title = MDLabel(
-            text="Today's Journal",
-            halign="center",
+        top_row.add_widget(back_btn)
+        top_row.add_widget(MDLabel(
+            text="Daily Journal",
             font_style="Headline",
-        )
-        header.add_widget(title)
-
-        layout.add_widget(header)
-
-        # Date label
+            role="small",
+            theme_text_color="Custom",
+            text_color=WHITE,
+            adaptive_height=True,
+            pos_hint={"center_y": 0.5},
+        ))
+        header.add_widget(top_row)
         self.date_label = MDLabel(
-            text="Date: --",
-            halign="center",
-            size_hint_y=None,
-            height=30,
+            text=date_str,
+            font_style="Body",
+            role="medium",
+            theme_text_color="Custom",
+            text_color=WHITE_DIM,
+            adaptive_height=True,
         )
-        layout.add_widget(self.date_label)
+        header.add_widget(self.date_label)
+        root.add_widget(header)
 
-        # Journal text area
+        # --- Content ---
+        content = MDBoxLayout(
+            orientation="vertical",
+            padding=[16, 16, 16, 0],
+            spacing=12,
+            md_bg_color=BG,
+        )
+
+        prompt_label = MDLabel(
+            text="How was your day?",
+            font_style="Title",
+            role="small",
+            adaptive_height=True,
+        )
+        content.add_widget(prompt_label)
+
+        card = MDCard(
+            orientation="vertical",
+            padding=[4, 4, 4, 4],
+            style="elevated",
+            elevation=1,
+        )
         self.journal_field = MDTextField(
             mode="outlined",
             multiline=True,
-            size_hint=(1, 0.6),
+            hint_text="Write about your day, thoughts, feelings...",
+            size_hint=(1, 1),
         )
-        self.journal_field.hint_text = "Write about your day..."
-        layout.add_widget(self.journal_field)
+        card.add_widget(self.journal_field)
+        content.add_widget(card)
 
-        # Save button
-        save_btn = MDButton(
+        root.add_widget(content)
+
+        # --- Footer ---
+        footer = MDBoxLayout(
+            orientation="vertical",
+            size_hint=(1, None),
+            height=80,
+            padding=[16, 12, 16, 12],
+            md_bg_color=BG,
+        )
+        self.save_btn = MDButton(
             style="filled",
-            pos_hint={"center_x": 0.5},
+            theme_width="Custom",
+            size_hint_x=1,
             on_release=self.save_entry,
         )
-        save_btn.add_widget(MDButtonText(text="Save Entry"))
-        layout.add_widget(save_btn)
+        self.save_btn.add_widget(MDButtonText(text="Save Entry"))
+        footer.add_widget(self.save_btn)
+        root.add_widget(footer)
 
-        self.add_widget(layout)
+        self.add_widget(root)
 
     def go_back(self):
-        """Return to home screen"""
         self.manager.current = "home"
 
     def save_entry(self, *args):
-        """Save journal entry"""
-        # TODO: Call api_client.create_journal_entry()
+        # TODO: Call api_client.create_journal_entry() (Issue #8)
         pass
 
     def load_entry(self, date):
-        """Load journal entry for date"""
-        # TODO: Call api_client.get_journal_by_date()
+        # TODO: Call api_client.get_journal_by_date() (Issue #8)
         pass

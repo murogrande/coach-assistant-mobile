@@ -13,6 +13,7 @@ from screens import (
     JournalScreen,
     AnalysisScreen,
 )
+from services.api_client import api_client
 
 
 class CoachAssistantApp(MDApp):
@@ -38,6 +39,8 @@ class CoachAssistantApp(MDApp):
     def on_start(self):
         """Called when the application starts"""
         print("Coach Assistant App started")
+        if api_client.load_token():
+            self.root.current = "home"
 
 
 if __name__ == "__main__":

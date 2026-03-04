@@ -1,9 +1,11 @@
 """Tests for API client"""
 
+import os
+import json
 import pytest
 from unittest.mock import patch, MagicMock
 
-from services.api_client import APIClient, api_client
+from services.api_client import APIClient, api_client, TOKEN_FILE
 
 
 class TestAPIClient:
@@ -39,18 +41,40 @@ class TestAPIClient:
         assert "Authorization" not in client.headers
 
     @patch("services.api_client.requests.post")
-    def test_login_success(self, mock_post):
-        """Test successful login stores token"""
+    def test_login_success_jwt_format(self, mock_post):
+        """Test successful login stores token from tokens.access (JWT format)"""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "tokens": {"access": "jwt-access-token", "refresh": "jwt-refresh-token"},
+            "user": {"id": 1}
+        }
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        client = APIClient()
+        with patch("services.api_client.open", create=True), \
+             patch("services.api_client.json.dump"):
+            result = client.login("testuser", "password")
+
+        assert client.token == "jwt-access-token"
+        assert "Authorization" in client.headers
+        assert client.headers["Authorization"] == "Bearer jwt-access-token"
+        mock_post.assert_called_once()
+
+    @patch("services.api_client.requests.post")
+    def test_login_success_simple_format(self, mock_post):
+        """Test successful login stores token from simple token field"""
         mock_response = MagicMock()
         mock_response.json.return_value = {"token": "abc123", "user": {"id": 1}}
         mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
         client = APIClient()
-        result = client.login("testuser", "password")
+        with patch("builtins.open", MagicMock()), \
+             patch("services.api_client.json.dump"):
+            result = client.login("testuser", "password")
 
         assert client.token == "abc123"
-        assert result["token"] == "abc123"
         mock_post.assert_called_once()
 
     @patch("services.api_client.requests.post")
@@ -67,6 +91,57 @@ class TestAPIClient:
         assert result["username"] == "newuser"
         call_args = mock_post.call_args
         assert "register" in call_args[0][0]
+
+    def test_is_authenticated_false_without_token(self):
+        """Test is_authenticated returns False when no token"""
+        client = APIClient()
+        assert client.is_authenticated() is False
+
+    def test_is_authenticated_true_with_token(self):
+        """Test is_authenticated returns True when token is set"""
+        client = APIClient()
+        client.token = "some-token"
+        assert client.is_authenticated() is True
+
+    def test_logout_clears_token_and_header(self, tmp_path, monkeypatch):
+        """Test logout removes token from memory and disk"""
+        token_file = tmp_path / "token.json"
+        token_file.write_text(json.dumps({"access_token": "tok"}))
+        monkeypatch.setattr("services.api_client.TOKEN_FILE", str(token_file))
+
+        client = APIClient()
+        client.token = "tok"
+        client._update_auth_header()
+        client.logout()
+
+        assert client.token is None
+        assert "Authorization" not in client.headers
+        assert not token_file.exists()
+
+    def test_save_and_load_token(self, tmp_path, monkeypatch):
+        """Test token round-trips through save/load"""
+        token_file = tmp_path / "token.json"
+        monkeypatch.setattr("services.api_client.TOKEN_FILE", str(token_file))
+
+        client = APIClient()
+        client.token = "my-jwt-token"
+        client.save_token()
+
+        client2 = APIClient()
+        loaded = client2.load_token()
+
+        assert loaded == "my-jwt-token"
+        assert client2.token == "my-jwt-token"
+        assert client2.headers["Authorization"] == "Bearer my-jwt-token"
+
+    def test_load_token_returns_none_when_no_file(self, tmp_path, monkeypatch):
+        """Test load_token returns None when token file does not exist"""
+        monkeypatch.setattr(
+            "services.api_client.TOKEN_FILE",
+            str(tmp_path / "nonexistent.json")
+        )
+        client = APIClient()
+        assert client.load_token() is None
 
     @patch("services.api_client.requests.get")
     def test_get_goals(self, mock_get):

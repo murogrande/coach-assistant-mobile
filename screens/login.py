@@ -1,11 +1,18 @@
 """Login Screen - Issue #2: Login Screen UI"""
 
+import threading
+
+import requests
+from kivy.clock import Clock
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.textfield import MDTextField, MDTextFieldLeadingIcon
+from kivymd.uix.button import MDIconButton
 from kivymd.uix.button import MDButton, MDButtonText
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
+
+from services.api_client import api_client
 
 
 class LoginScreen(MDScreen):
@@ -85,6 +92,12 @@ class LoginScreen(MDScreen):
         self.username_field.add_widget(MDTextFieldLeadingIcon(icon="account"))
         card.add_widget(self.username_field)
 
+        password_row = MDBoxLayout(
+            orientation="horizontal",
+            spacing=4,
+            size_hint_x=1,
+            adaptive_height=True,
+        )
         self.password_field = MDTextField(
             mode="outlined",
             hint_text="Password",
@@ -92,7 +105,14 @@ class LoginScreen(MDScreen):
             size_hint_x=1,
         )
         self.password_field.add_widget(MDTextFieldLeadingIcon(icon="lock"))
-        card.add_widget(self.password_field)
+        password_row.add_widget(self.password_field)
+
+        self.eye_btn = MDIconButton(
+            icon="eye",
+            on_release=self.toggle_password_visibility,
+        )
+        password_row.add_widget(self.eye_btn)
+        card.add_widget(password_row)
 
         # Error label
         self.error_label = MDLabel(
@@ -164,6 +184,10 @@ class LoginScreen(MDScreen):
     def clear_error(self):
         self.error_label.text = ""
 
+    def toggle_password_visibility(self, *args):
+        self.password_field.password = not self.password_field.password
+        self.eye_btn.icon = "eye-off" if not self.password_field.password else "eye"
+
     def toggle_mode(self, *args):
         self.is_register_mode = not self.is_register_mode
         self.clear_error()
@@ -175,6 +199,24 @@ class LoginScreen(MDScreen):
             self.form_title.text = "Sign In"
             self.action_btn_text.text = "Login"
             self.toggle_btn_text.text = "Don't have an account? Register"
+
+    def _set_loading(self, loading: bool):
+        """Disable/enable button during API call"""
+        self.action_btn.disabled = loading
+
+    def _parse_error(self, exception: Exception) -> str:
+        """Extract a user-friendly message from a requests exception"""
+        if isinstance(exception, requests.HTTPError):
+            try:
+                data = exception.response.json()
+                for key in ("detail", "non_field_errors", "message", "error"):
+                    if key in data:
+                        val = data[key]
+                        return val[0] if isinstance(val, list) else str(val)
+                return f"Error {exception.response.status_code}"
+            except Exception:
+                return f"Error {exception.response.status_code}"
+        return str(exception)
 
     # ------------------------------------------------------------------
     # Actions
@@ -190,9 +232,40 @@ class LoginScreen(MDScreen):
             self.do_login()
 
     def do_login(self):
-        # TODO: Call api_client.login() - Issue #3
-        self.manager.current = "home"
+        username = self.username_field.text.strip()
+        password = self.password_field.text
+        self._set_loading(True)
+
+        def _login():
+            try:
+                api_client.login(username, password)
+                Clock.schedule_once(lambda dt: self._on_auth_success())
+            except Exception as e:
+                msg = self._parse_error(e)
+                Clock.schedule_once(lambda dt: self._on_auth_error(msg))
+
+        threading.Thread(target=_login, daemon=True).start()
 
     def do_register(self):
-        # TODO: Call api_client.register() - Issue #3
+        username = self.username_field.text.strip()
+        password = self.password_field.text
+        self._set_loading(True)
+
+        def _register():
+            try:
+                api_client.register(username, password)
+                api_client.login(username, password)
+                Clock.schedule_once(lambda dt: self._on_auth_success())
+            except Exception as e:
+                msg = self._parse_error(e)
+                Clock.schedule_once(lambda dt: self._on_auth_error(msg))
+
+        threading.Thread(target=_register, daemon=True).start()
+
+    def _on_auth_success(self):
+        self._set_loading(False)
         self.manager.current = "home"
+
+    def _on_auth_error(self, message: str):
+        self._set_loading(False)
+        self.show_error(message)
