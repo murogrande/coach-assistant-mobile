@@ -20,6 +20,7 @@ class APIClient:
 
     def __init__(self):
         self.token: Optional[str] = None
+        self.username: Optional[str] = None
         self.headers = {
             "Content-Type": "application/json"
         }
@@ -53,6 +54,7 @@ class APIClient:
         # Backend returns tokens.access (JWT) or token (simple)
         tokens_obj = result.get("tokens", {})
         self.token = tokens_obj.get("access") or result.get("token")
+        self.username = result.get("user", {}).get("username") or username
         self._update_auth_header()
         self.save_token()
 
@@ -83,18 +85,19 @@ class APIClient:
         return response.json()
 
     def save_token(self):
-        """Persist the current access token to disk"""
+        """Persist the current access token and username to disk"""
         if self.token:
             with open(TOKEN_FILE, "w") as f:
-                json.dump({"access_token": self.token}, f)
+                json.dump({"access_token": self.token, "username": self.username}, f)
 
     def load_token(self) -> Optional[str]:
-        """Load persisted token from disk and set auth header"""
+        """Load persisted token and username from disk"""
         if os.path.exists(TOKEN_FILE):
             try:
                 with open(TOKEN_FILE) as f:
                     data = json.load(f)
                 self.token = data.get("access_token")
+                self.username = data.get("username")
                 if self.token:
                     self._update_auth_header()
                     return self.token
@@ -103,8 +106,9 @@ class APIClient:
         return None
 
     def logout(self):
-        """Clear token from memory and disk"""
+        """Clear token and username from memory and disk"""
         self.token = None
+        self.username = None
         self.headers.pop("Authorization", None)
         if os.path.exists(TOKEN_FILE):
             os.remove(TOKEN_FILE)

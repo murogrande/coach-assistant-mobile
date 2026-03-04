@@ -1,14 +1,78 @@
-"""Home Screen"""
+"""Home Screen - Issue #4: Home/Dashboard Screen"""
 
+import threading
+import datetime
+
+from kivy.clock import Clock
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.button import MDButton, MDButtonText
+from kivymd.uix.button import MDButton, MDButtonText, MDIconButton
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
 from kivymd.icon_definitions import md_icons
 
 from services.api_client import api_client
+
+
+BLUE = (0.129, 0.588, 0.953, 1)
+WHITE = (1, 1, 1, 1)
+WHITE_DIM = (1, 1, 1, 0.85)
+BG = (0.96, 0.96, 0.96, 1)
+
+
+def _greeting() -> str:
+    hour = datetime.datetime.now().hour
+    if 5 <= hour < 12:
+        return "Good morning"
+    if 12 <= hour < 18:
+        return "Good afternoon"
+    if 18 <= hour < 22:
+        return "Good evening"
+    return "Good night"
+
+
+class StatCard(MDCard):
+    """Small stats card for the dashboard"""
+
+    def __init__(self, icon: str, value: str, label: str, **kwargs):
+        super().__init__(
+            orientation="vertical",
+            padding=[16, 14, 16, 14],
+            spacing=4,
+            size_hint=(1, None),
+            height=90,
+            elevation=1,
+            style="elevated",
+            **kwargs,
+        )
+        top_row = MDBoxLayout(orientation="horizontal", spacing=8, adaptive_height=True)
+        top_row.add_widget(MDLabel(
+            text=md_icons.get(icon, ""),
+            font_style="Icon",
+            font_size="20sp",
+            size_hint=(None, None),
+            size=(24, 24),
+            theme_text_color="Custom",
+            text_color=BLUE,
+        ))
+        self.value_label = MDLabel(
+            text=value,
+            font_style="Title",
+            role="large",
+            adaptive_height=True,
+            theme_text_color="Custom",
+            text_color=BLUE,
+        )
+        top_row.add_widget(self.value_label)
+        self.add_widget(top_row)
+        self.add_widget(MDLabel(
+            text=label,
+            font_style="Body",
+            role="small",
+            theme_text_color="Secondary",
+            adaptive_height=True,
+        ))
 
 
 class NavCard(MDCard):
@@ -28,7 +92,7 @@ class NavCard(MDCard):
         )
         self._on_tap = on_tap
 
-        icon_label = MDLabel(
+        self.add_widget(MDLabel(
             text=md_icons.get(icon, ""),
             font_style="Icon",
             font_size="32sp",
@@ -36,9 +100,8 @@ class NavCard(MDCard):
             width=48,
             halign="center",
             theme_text_color="Custom",
-            text_color=(0.129, 0.588, 0.953, 1),
-        )
-        self.add_widget(icon_label)
+            text_color=BLUE,
+        ))
 
         text_col = MDBoxLayout(orientation="vertical", spacing=2)
         text_col.add_widget(MDLabel(
@@ -56,7 +119,7 @@ class NavCard(MDCard):
         ))
         self.add_widget(text_col)
 
-        chevron = MDLabel(
+        self.add_widget(MDLabel(
             text=md_icons.get("chevron-right", ""),
             font_style="Icon",
             font_size="24sp",
@@ -64,8 +127,7 @@ class NavCard(MDCard):
             width=32,
             halign="center",
             theme_text_color="Secondary",
-        )
-        self.add_widget(chevron)
+        ))
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
@@ -89,44 +151,68 @@ class HomeScreen(MDScreen):
             orientation="vertical",
             size_hint=(1, None),
             height=160,
-            padding=[32, 32, 32, 24],
-            spacing=6,
-            md_bg_color=(0.129, 0.588, 0.953, 1),
+            padding=[24, 28, 24, 16],
+            spacing=4,
+            md_bg_color=BLUE,
         )
-        header.add_widget(MDLabel(
-            text="Coach Assistant",
+
+        top_row = MDBoxLayout(orientation="horizontal", adaptive_height=True)
+        title_col = MDBoxLayout(orientation="vertical", spacing=4)
+        self.greeting_label = MDLabel(
+            text=f"{_greeting()}!",
             font_style="Display",
             role="small",
-            halign="left",
             theme_text_color="Custom",
-            text_color=(1, 1, 1, 1),
+            text_color=WHITE,
             adaptive_height=True,
-        ))
-        header.add_widget(MDLabel(
-            text="What would you like to do today?",
+        )
+        self.username_label = MDLabel(
+            text="",
             font_style="Body",
             role="large",
-            halign="left",
             theme_text_color="Custom",
-            text_color=(1, 1, 1, 0.85),
+            text_color=WHITE_DIM,
             adaptive_height=True,
-        ))
+        )
+        title_col.add_widget(self.greeting_label)
+        title_col.add_widget(self.username_label)
+        top_row.add_widget(title_col)
+
+        self.refresh_btn = MDIconButton(
+            icon="refresh",
+            theme_icon_color="Custom",
+            icon_color=WHITE,
+            pos_hint={"center_y": 0.5},
+            on_release=lambda x: self.load_stats(),
+        )
+        top_row.add_widget(self.refresh_btn)
+        header.add_widget(top_row)
         root.add_widget(header)
 
-        # --- Content area ---
-        content_bg = MDBoxLayout(
-            orientation="vertical",
-            md_bg_color=(0.96, 0.96, 0.96, 1),
-        )
-
+        # --- Content ---
+        content_bg = MDBoxLayout(orientation="vertical", md_bg_color=BG)
         scroll = MDScrollView()
         inner = MDBoxLayout(
             orientation="vertical",
-            padding=[20, 24, 20, 20],
+            padding=[16, 16, 16, 16],
             spacing=14,
             adaptive_height=True,
         )
 
+        # Stats row
+        stats_row = MDBoxLayout(
+            orientation="horizontal",
+            spacing=12,
+            size_hint=(1, None),
+            height=90,
+        )
+        self.goals_stat = StatCard(icon="flag-checkered", value="—", label="Goals this week")
+        self.journal_stat = StatCard(icon="notebook", value="—", label="Journal entries")
+        stats_row.add_widget(self.goals_stat)
+        stats_row.add_widget(self.journal_stat)
+        inner.add_widget(stats_row)
+
+        # Nav cards
         inner.add_widget(NavCard(
             icon="flag-checkered",
             title="My Goals",
@@ -146,13 +232,8 @@ class HomeScreen(MDScreen):
             on_tap=lambda: self.navigate("analysis"),
         ))
 
-        # Logout button
-        logout_row = MDBoxLayout(
-            orientation="horizontal",
-            size_hint=(1, None),
-            height=56,
-            padding=[0, 8, 0, 0],
-        )
+        # Logout
+        logout_row = MDBoxLayout(size_hint=(1, None), height=56, padding=[0, 8, 0, 0])
         logout_btn = MDButton(
             style="text",
             theme_width="Custom",
@@ -167,6 +248,37 @@ class HomeScreen(MDScreen):
         content_bg.add_widget(scroll)
         root.add_widget(content_bg)
         self.add_widget(root)
+
+    def on_pre_enter(self, *args):
+        """Refresh user info and stats every time the screen is shown"""
+        self.greeting_label.text = f"{_greeting()}!"
+        name = api_client.username or ""
+        self.username_label.text = f"Welcome back, {name}" if name else "What would you like to do today?"
+        self.load_stats()
+
+    def load_stats(self):
+        """Load goal and journal counts from API in background thread"""
+        def _fetch():
+            goals_value = "—"
+            journal_value = "—"
+            try:
+                goals = api_client.get_goals()
+                completed = sum(1 for g in goals if g.get("completed"))
+                goals_value = f"{completed}/{len(goals)}"
+            except Exception:
+                pass
+            try:
+                entries = api_client.get_journal_entries()
+                journal_value = str(len(entries))
+            except Exception:
+                pass
+            Clock.schedule_once(lambda dt: self._update_stats(goals_value, journal_value))
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _update_stats(self, goals_value: str, journal_value: str):
+        self.goals_stat.value_label.text = goals_value
+        self.journal_stat.value_label.text = journal_value
 
     def navigate(self, screen_name):
         self.manager.current = screen_name
