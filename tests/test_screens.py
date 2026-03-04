@@ -341,6 +341,96 @@ class TestGoalsScreen:
         assert hasattr(screen, "goals_list")
         assert screen.goals_list is not None
 
+    def test_goals_screen_shows_placeholder_goals(self, screen_manager):
+        """Test GoalsScreen pre-populates with placeholder goals"""
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        cards = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        assert len(cards) == 3
+
+    def test_delete_goal_removes_card(self, screen_manager):
+        """Test deleting a goal removes it from the list"""
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        cards_before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        screen.delete_goal(cards_before[0])
+        cards_after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+
+        assert len(cards_after) == len(cards_before) - 1
+
+    def test_add_goal_card_adds_to_list(self, screen_manager):
+        """Test _add_goal_card adds a new GoalCard"""
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        cards_before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        screen._add_goal_card("New test goal")
+        cards_after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+
+        assert len(cards_after) == len(cards_before) + 1
+
+    def test_empty_state_hidden_when_goals_exist(self, screen_manager):
+        """Test empty label is hidden when there are goals"""
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        assert screen.empty_label.opacity == 0
+
+    def test_empty_state_shown_when_no_goals(self, screen_manager):
+        """Test empty label is visible when all goals are deleted"""
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        cards = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        for card in cards:
+            screen.delete_goal(card)
+
+        assert screen.empty_label.opacity == 1
+
+    def test_confirm_add_goal_with_text(self, screen_manager):
+        """Test confirm_add_goal adds a card when text is provided"""
+        from screens.goals import GoalsScreen, GoalCard
+        from kivymd.uix.textfield import MDTextField
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        cards_before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        screen.new_goal_field = MDTextField(text="Walk 10k steps")
+        screen._dialog = MagicMock()
+        screen.confirm_add_goal()
+        cards_after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+
+        assert len(cards_after) == len(cards_before) + 1
+
+    def test_confirm_add_goal_ignores_empty_text(self, screen_manager):
+        """Test confirm_add_goal does not add a card for empty input"""
+        from screens.goals import GoalsScreen, GoalCard
+        from kivymd.uix.textfield import MDTextField
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        cards_before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        screen.new_goal_field = MDTextField(text="   ")
+        screen._dialog = MagicMock()
+        screen.confirm_add_goal()
+        cards_after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+
+        assert len(cards_after) == len(cards_before)
+
 
 class TestJournalScreen:
     """Tests for JournalScreen"""

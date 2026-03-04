@@ -86,7 +86,7 @@ Methods:
 | #2 | Implement Login Screen UI | ✅ Done |
 | #3 | Implement Authentication Logic | ✅ Done |
 | #4 | Create Home/Dashboard Screen | ✅ Done |
-| #5 | Implement Weekly Goals Screen UI | 🔶 Partial |
+| #5 | Implement Weekly Goals Screen UI | ✅ Done |
 | #6 | Implement Goals API Integration | 🔲 Pending |
 | #7 | Implement Daily Journal Screen UI | 🔶 Partial |
 | #8 | Implement Journal API Integration | 🔲 Pending |
@@ -102,7 +102,7 @@ Methods:
 | Issue | Done | Missing |
 |-------|------|---------|
 | #4 Home | Layout, nav cards, navigation, username, stats, refresh | — |
-| #5 Goals | Layout, cards, checkboxes | Add goal dialog, swipe to delete |
+| #5 Goals | Layout, cards, checkboxes, add dialog, delete, empty state | — |
 | #7 Journal | Layout, text area, date display | Date selector/navigation, load existing entries, discard confirmation |
 | #9 Analysis | Layout, scrollable content, empty state, generate button | Week selector, analysis sections, loading state, share button |
 
@@ -119,4 +119,4 @@ Methods:
 - Always mock API calls using `unittest.mock.patch`
 - Use the `screen_manager` fixture from `conftest.py` for screen tests
 - Tests run headlessly (SDL dummy driver configured in `conftest.py`)
-- 45 tests currently passing
+- 52 tests currently passing

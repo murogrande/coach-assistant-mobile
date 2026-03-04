@@ -33,7 +33,7 @@ coach-assistant-mobile/
 │   └── api_client.py       # REST API client singleton (auth, goals, journal, analysis)
 ├── utils/                  # Helper functions
 ├── assets/                 # Images, fonts, icons
-├── tests/                  # Test suite (45 tests)
+├── tests/                  # Test suite (52 tests)
 └── requirements.txt
 ```
 
@@ -95,7 +95,8 @@ python -m pytest tests/ -v      # verbose
 - ✅ **Issue #4** — Home dashboard: greeting, username, stats cards (goals/journal), refresh button, navigation cards
 
 ### In Progress / Next
-- 🔶 **Issue #5–6** — Goals screen UI + API integration
+- ✅ **Issue #5** — Goals screen: goal cards with checkboxes, add goal dialog, delete, empty state
+- 🔲 **Issue #6** — Goals API integration
 - 🔲 **Issue #7–8** — Journal screen UI + API integration
 - 🔲 **Issue #9–10** — Analysis screen UI + API integration
 - 🔲 **Issue #15–16** — Buildozer Android build + device testing
