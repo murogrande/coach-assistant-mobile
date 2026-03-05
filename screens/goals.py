@@ -1,5 +1,8 @@
-"""Goals Screen - Issue #5: Weekly Goals Screen UI"""
+"""Goals Screen - Issue #5/#6: Weekly Goals Screen UI + API Integration"""
 
+import threading
+
+from kivy.clock import Clock
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.scrollview import MDScrollView
@@ -15,24 +18,19 @@ from kivymd.uix.dialog import (
 )
 from kivymd.uix.textfield import MDTextField
 
+from services.api_client import api_client
+
 
 BLUE = (0.129, 0.588, 0.953, 1)
 WHITE = (1, 1, 1, 1)
 WHITE_DIM = (1, 1, 1, 0.85)
 BG = (0.96, 0.96, 0.96, 1)
 
-# Placeholder goals until API is connected (Issue #6)
-_PLACEHOLDER_GOALS = [
-    "Exercise for 30 minutes every day",
-    "Read 20 pages of a book",
-    "Drink 8 glasses of water",
-]
-
 
 class GoalCard(MDCard):
     """Card representing a single goal with checkbox and delete button"""
 
-    def __init__(self, goal_text: str, on_delete, completed: bool = False, **kwargs):
+    def __init__(self, goal_text: str, goal_id, on_delete, on_toggle, completed: bool = False, **kwargs):
         super().__init__(
             orientation="horizontal",
             padding=[16, 14, 16, 14],
@@ -43,7 +41,9 @@ class GoalCard(MDCard):
             style="elevated",
             **kwargs,
         )
+        self.goal_id = goal_id
         self._on_delete = on_delete
+        self._on_toggle = on_toggle
 
         self.checkbox = MDCheckbox(
             size_hint=(None, None),
@@ -83,6 +83,7 @@ class GoalCard(MDCard):
 
     def on_checkbox_change(self, instance, value):
         self.goal_label.theme_text_color = "Secondary" if value else "Primary"
+        self._on_toggle(self, value)
 
 
 class GoalsScreen(MDScreen):
@@ -134,6 +135,19 @@ class GoalsScreen(MDScreen):
 
         # --- Content ---
         content_bg = MDBoxLayout(orientation="vertical", md_bg_color=BG)
+
+        self.status_label = MDLabel(
+            text="",
+            halign="center",
+            font_style="Body",
+            role="medium",
+            theme_text_color="Error",
+            adaptive_height=True,
+            size_hint=(1, None),
+            padding=[16, 8, 16, 0],
+        )
+        content_bg.add_widget(self.status_label)
+
         scroll = MDScrollView()
 
         self.goals_list = MDBoxLayout(
@@ -143,7 +157,6 @@ class GoalsScreen(MDScreen):
             adaptive_height=True,
         )
 
-        # Empty state label (hidden when goals exist)
         self.empty_label = MDLabel(
             text="No goals yet.\nTap 'Add Goal' to get started!",
             halign="center",
@@ -154,9 +167,6 @@ class GoalsScreen(MDScreen):
             size_hint=(1, None),
         )
         self.goals_list.add_widget(self.empty_label)
-
-        for goal_text in _PLACEHOLDER_GOALS:
-            self._add_goal_card(goal_text)
 
         scroll.add_widget(self.goals_list)
         content_bg.add_widget(scroll)
@@ -183,23 +193,84 @@ class GoalsScreen(MDScreen):
         self.add_widget(root)
         self._refresh_empty_state()
 
-    def _add_goal_card(self, goal_text: str, completed: bool = False):
+    def on_pre_enter(self):
+        self.load_goals()
+
+    def load_goals(self):
+        """Fetch goals from the API and populate the list."""
+        self.status_label.text = "Loading..."
+
+        def _do():
+            try:
+                goals = api_client.get_goals()
+                Clock.schedule_once(lambda dt: self._populate_goals(goals))
+            except Exception as e:
+                Clock.schedule_once(lambda dt: self.show_error(str(e)))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _populate_goals(self, goals):
+        """Clear existing cards and render goals from API data."""
+        for card in [w for w in self.goals_list.children if isinstance(w, GoalCard)]:
+            self.goals_list.remove_widget(card)
+        self.status_label.text = ""
+        for goal in goals:
+            self._add_goal_card(
+                goal_text=goal.get("goal_text", ""),
+                goal_id=goal.get("id"),
+                completed=goal.get("completed", False),
+            )
+
+    def _add_goal_card(self, goal_text: str, goal_id=None, completed: bool = False):
         card = GoalCard(
             goal_text=goal_text,
+            goal_id=goal_id,
             on_delete=self.delete_goal,
+            on_toggle=self.toggle_goal,
             completed=completed,
         )
         self.goals_list.add_widget(card)
         self._refresh_empty_state()
 
     def _refresh_empty_state(self):
-        """Show empty label only when there are no goal cards"""
+        """Show empty label only when there are no goal cards."""
         goal_cards = [w for w in self.goals_list.children if isinstance(w, GoalCard)]
         self.empty_label.opacity = 0 if goal_cards else 1
 
-    def delete_goal(self, card: GoalCard):
+    def toggle_goal(self, card: "GoalCard", completed: bool):
+        """Persist completed state to the API."""
+        if card.goal_id is None:
+            return
+
+        def _do():
+            try:
+                api_client.update_goal(card.goal_id, completed=completed)
+            except Exception as e:
+                Clock.schedule_once(lambda dt: self.show_error(str(e)))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def delete_goal(self, card: "GoalCard"):
+        """Delete goal from API then remove card, or remove locally if no ID."""
+        if card.goal_id is None:
+            self._remove_card(card)
+            return
+
+        def _do():
+            try:
+                api_client.delete_goal(card.goal_id)
+                Clock.schedule_once(lambda dt: self._remove_card(card))
+            except Exception as e:
+                Clock.schedule_once(lambda dt: self.show_error(str(e)))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _remove_card(self, card: "GoalCard"):
         self.goals_list.remove_widget(card)
         self._refresh_empty_state()
+
+    def show_error(self, message: str):
+        self.status_label.text = message
 
     def show_add_dialog(self):
         self.new_goal_field = MDTextField(
@@ -226,6 +297,7 @@ class GoalsScreen(MDScreen):
             ),
         )
         self._dialog.open()
+        Clock.schedule_once(lambda dt: setattr(self.new_goal_field, "focus", True), 0.1)
 
     def close_dialog(self, *args):
         if self._dialog:
@@ -234,13 +306,19 @@ class GoalsScreen(MDScreen):
 
     def confirm_add_goal(self, *args):
         text = self.new_goal_field.text.strip()
-        if text:
-            self._add_goal_card(text)
         self.close_dialog()
+        if not text:
+            return
+
+        def _do():
+            try:
+                result = api_client.create_goal(text)
+                goal_id = result.get("id")
+                Clock.schedule_once(lambda dt: self._add_goal_card(text, goal_id=goal_id))
+            except Exception as e:
+                Clock.schedule_once(lambda dt: self.show_error(str(e)))
+
+        threading.Thread(target=_do, daemon=True).start()
 
     def go_back(self):
         self.manager.current = "home"
-
-    def load_goals(self):
-        # TODO: Call api_client.get_goals() (Issue #6)
-        pass

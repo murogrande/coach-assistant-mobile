@@ -4,6 +4,7 @@ API Client for communicating with Django backend
 
 import os
 import json
+from datetime import date, timedelta
 import requests
 from typing import Optional, Dict, List
 
@@ -126,11 +127,14 @@ class APIClient:
         return response.json()
 
     def create_goal(self, goal_text: str, category: str = "personal") -> Dict:
-        """Create new weekly goal"""
+        """Create new weekly goal for the current week."""
         url = f"{self.API_BASE_URL}/goals/"
+        today = date.today()
+        week_start = today - timedelta(days=today.weekday())  # Monday
         data = {
             "goal_text": goal_text,
-            "category": category
+            "category": category,
+            "week_start_date": week_start.isoformat(),
         }
         response = requests.post(url, json=data, headers=self.headers)
         response.raise_for_status()
@@ -148,6 +152,12 @@ class APIClient:
         response = requests.put(url, json=data, headers=self.headers)
         response.raise_for_status()
         return response.json()
+
+    def delete_goal(self, goal_id: int) -> None:
+        """Delete a goal by ID"""
+        url = f"{self.API_BASE_URL}/goals/{goal_id}/"
+        response = requests.delete(url, headers=self.headers)
+        response.raise_for_status()
 
     # Journal endpoints
     def get_journal_entries(self) -> List[Dict]:

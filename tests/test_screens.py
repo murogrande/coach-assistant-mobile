@@ -341,23 +341,24 @@ class TestGoalsScreen:
         assert hasattr(screen, "goals_list")
         assert screen.goals_list is not None
 
-    def test_goals_screen_shows_placeholder_goals(self, screen_manager):
-        """Test GoalsScreen pre-populates with placeholder goals"""
+    def test_goals_screen_starts_empty(self, screen_manager):
+        """Test GoalsScreen starts with no goal cards (loads from API on enter)"""
         from screens.goals import GoalsScreen, GoalCard
 
         screen = GoalsScreen(name="goals")
         screen_manager.add_widget(screen)
 
         cards = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
-        assert len(cards) == 3
+        assert len(cards) == 0
 
     def test_delete_goal_removes_card(self, screen_manager):
-        """Test deleting a goal removes it from the list"""
+        """Test deleting a goal (no API ID) removes it from the list"""
         from screens.goals import GoalsScreen, GoalCard
 
         screen = GoalsScreen(name="goals")
         screen_manager.add_widget(screen)
 
+        screen._add_goal_card("Test goal")
         cards_before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
         screen.delete_goal(cards_before[0])
         cards_after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
@@ -377,6 +378,15 @@ class TestGoalsScreen:
 
         assert len(cards_after) == len(cards_before) + 1
 
+    def test_empty_state_shown_on_start(self, screen_manager):
+        """Test empty label is visible when screen has no goals"""
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        assert screen.empty_label.opacity == 1
+
     def test_empty_state_hidden_when_goals_exist(self, screen_manager):
         """Test empty label is hidden when there are goals"""
         from screens.goals import GoalsScreen
@@ -384,6 +394,7 @@ class TestGoalsScreen:
         screen = GoalsScreen(name="goals")
         screen_manager.add_widget(screen)
 
+        screen._add_goal_card("A goal")
         assert screen.empty_label.opacity == 0
 
     def test_empty_state_shown_when_no_goals(self, screen_manager):
@@ -393,30 +404,16 @@ class TestGoalsScreen:
         screen = GoalsScreen(name="goals")
         screen_manager.add_widget(screen)
 
+        screen._add_goal_card("Goal 1")
+        screen._add_goal_card("Goal 2")
         cards = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
         for card in cards:
             screen.delete_goal(card)
 
         assert screen.empty_label.opacity == 1
 
-    def test_confirm_add_goal_with_text(self, screen_manager):
-        """Test confirm_add_goal adds a card when text is provided"""
-        from screens.goals import GoalsScreen, GoalCard
-        from kivymd.uix.textfield import MDTextField
-
-        screen = GoalsScreen(name="goals")
-        screen_manager.add_widget(screen)
-
-        cards_before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
-        screen.new_goal_field = MDTextField(text="Walk 10k steps")
-        screen._dialog = MagicMock()
-        screen.confirm_add_goal()
-        cards_after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
-
-        assert len(cards_after) == len(cards_before) + 1
-
     def test_confirm_add_goal_ignores_empty_text(self, screen_manager):
-        """Test confirm_add_goal does not add a card for empty input"""
+        """Test confirm_add_goal does not spawn a thread for empty input"""
         from screens.goals import GoalsScreen, GoalCard
         from kivymd.uix.textfield import MDTextField
 
@@ -426,10 +423,125 @@ class TestGoalsScreen:
         cards_before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
         screen.new_goal_field = MDTextField(text="   ")
         screen._dialog = MagicMock()
-        screen.confirm_add_goal()
-        cards_after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
 
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            screen.confirm_add_goal()
+            mock_thread.assert_not_called()
+
+        cards_after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
         assert len(cards_after) == len(cards_before)
+
+    def test_confirm_add_goal_calls_api(self, screen_manager):
+        """Test confirm_add_goal spawns a thread to call create_goal"""
+        from screens.goals import GoalsScreen
+        from kivymd.uix.textfield import MDTextField
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        screen.new_goal_field = MDTextField(text="Walk 10k steps")
+        screen._dialog = MagicMock()
+
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.confirm_add_goal()
+            mock_thread.assert_called_once()
+
+    def test_load_goals_calls_api_in_thread(self, screen_manager):
+        """Test load_goals spawns a background thread"""
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.load_goals()
+            mock_thread.assert_called_once()
+
+    def test_populate_goals_renders_cards(self, screen_manager):
+        """Test _populate_goals creates a GoalCard for each goal"""
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        goals = [
+            {"id": 1, "goal_text": "Run 5k", "completed": False},
+            {"id": 2, "goal_text": "Read book", "completed": True},
+        ]
+        screen._populate_goals(goals)
+
+        cards = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        assert len(cards) == 2
+
+    def test_populate_goals_sets_completed_state(self, screen_manager):
+        """Test _populate_goals reflects completed flag on the card checkbox"""
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        goals = [{"id": 1, "goal_text": "Done goal", "completed": True}]
+        screen._populate_goals(goals)
+
+        cards = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        assert cards[0].checkbox.active is True
+
+    def test_delete_goal_with_id_calls_api(self, screen_manager):
+        """Test delete_goal calls api_client.delete_goal when card has an ID"""
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._add_goal_card("API goal", goal_id=42)
+
+        from screens.goals import GoalCard
+        card = next(w for w in screen.goals_list.children if isinstance(w, GoalCard))
+
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.delete_goal(card)
+            mock_thread.assert_called_once()
+
+    def test_toggle_goal_with_id_calls_api(self, screen_manager):
+        """Test toggle_goal calls api_client.update_goal when card has an ID"""
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._add_goal_card("API goal", goal_id=7)
+
+        card = next(w for w in screen.goals_list.children if isinstance(w, GoalCard))
+
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.toggle_goal(card, True)
+            mock_thread.assert_called_once()
+
+    def test_toggle_goal_without_id_skips_api(self, screen_manager):
+        """Test toggle_goal does nothing when card has no ID"""
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._add_goal_card("Local goal")
+
+        card = next(w for w in screen.goals_list.children if isinstance(w, GoalCard))
+
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            screen.toggle_goal(card, True)
+            mock_thread.assert_not_called()
+
+    def test_show_error_sets_status_label(self, screen_manager):
+        """Test show_error updates the status label"""
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        screen.show_error("Network error")
+        assert screen.status_label.text == "Network error"
 
 
 class TestJournalScreen:
