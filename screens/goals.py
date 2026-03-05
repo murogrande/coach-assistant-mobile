@@ -219,7 +219,8 @@ class GoalsScreen(MDScreen):
                 goals = api_client.get_goals()
                 Clock.schedule_once(lambda dt: self._populate_goals(goals))
             except Exception as e:
-                Clock.schedule_once(lambda dt: self.show_error(str(e)))
+                msg = str(e)
+                Clock.schedule_once(lambda dt: self.show_error(msg))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -261,7 +262,8 @@ class GoalsScreen(MDScreen):
             try:
                 api_client.update_goal(card.goal_id, completed=completed)
             except Exception as e:
-                Clock.schedule_once(lambda dt: self.show_error(str(e)))
+                msg = str(e)
+                Clock.schedule_once(lambda dt: self.show_error(msg))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -276,7 +278,8 @@ class GoalsScreen(MDScreen):
                 api_client.delete_goal(card.goal_id)
                 Clock.schedule_once(lambda dt: self._remove_card(card))
             except Exception as e:
-                Clock.schedule_once(lambda dt: self.show_error(str(e)))
+                msg = str(e)
+                Clock.schedule_once(lambda dt: self.show_error(msg))
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -336,7 +339,8 @@ class GoalsScreen(MDScreen):
                 goal_id = result.get("id")
                 Clock.schedule_once(lambda dt: self._add_goal_card(text, goal_id=goal_id))
             except Exception as e:
-                Clock.schedule_once(lambda dt: self.show_error(str(e)))
+                msg = str(e)
+                Clock.schedule_once(lambda dt: self.show_error(msg))
 
         threading.Thread(target=_do, daemon=True).start()
 

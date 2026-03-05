@@ -6,7 +6,6 @@ from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.button import MDButton, MDButtonText, MDIconButton
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
-from kivymd.icon_definitions import md_icons
 
 
 BLUE = (0.129, 0.588, 0.953, 1)

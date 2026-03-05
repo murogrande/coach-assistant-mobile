@@ -1,6 +1,5 @@
 """Tests for screen modules"""
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 
@@ -161,7 +160,7 @@ class TestLoginScreen:
         login.username_field.text = "testuser"
         login.password_field.text = "password123"
 
-        with patch("screens.login.api_client") as mock_client, \
+        with patch("screens.login.api_client"), \
              patch("screens.login.threading.Thread") as mock_thread:
             mock_thread.return_value = MagicMock()
             login.do_login()

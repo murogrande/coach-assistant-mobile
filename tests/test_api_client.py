@@ -1,11 +1,9 @@
 """Tests for API client"""
 
-import os
 import json
-import pytest
 from unittest.mock import patch, MagicMock
 
-from services.api_client import APIClient, api_client, TOKEN_FILE
+from services.api_client import APIClient, api_client
 
 
 class TestAPIClient:
@@ -54,7 +52,7 @@ class TestAPIClient:
         client = APIClient()
         with patch("services.api_client.open", create=True), \
              patch("services.api_client.json.dump"):
-            result = client.login("testuser", "password")
+            client.login("testuser", "password")
 
         assert client.token == "jwt-access-token"
         assert "Authorization" in client.headers
@@ -72,7 +70,7 @@ class TestAPIClient:
         client = APIClient()
         with patch("builtins.open", MagicMock()), \
              patch("services.api_client.json.dump"):
-            result = client.login("testuser", "password")
+            client.login("testuser", "password")
 
         assert client.token == "abc123"
         mock_post.assert_called_once()
