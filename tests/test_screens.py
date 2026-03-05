@@ -565,6 +565,244 @@ class TestJournalScreen:
         assert hasattr(screen, "journal_field")
         assert screen.journal_field is not None
 
+    def test_journal_screen_has_date_label(self, screen_manager):
+        """Test JournalScreen has a date label"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        assert hasattr(screen, "date_label")
+        assert screen.date_label.text != ""
+
+    def test_journal_screen_has_nav_buttons(self, screen_manager):
+        """Test JournalScreen has prev and next navigation buttons"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        assert hasattr(screen, "prev_btn")
+        assert hasattr(screen, "next_btn")
+
+    def test_next_button_disabled_for_today(self, screen_manager):
+        """Test next button is disabled when current_date is today"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        assert screen.next_btn.disabled is True
+
+    def test_navigate_to_previous_day_changes_date(self, screen_manager):
+        """Test _do_navigate_date(-1) moves current_date one day back"""
+        import datetime
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        initial_date = screen.current_date
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen._do_navigate_date(-1)
+
+        assert screen.current_date == initial_date - datetime.timedelta(days=1)
+
+    def test_navigate_to_previous_day_enables_next_button(self, screen_manager):
+        """Test navigating to a past day re-enables the next button"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen._do_navigate_date(-1)
+
+        assert screen.next_btn.disabled is False
+
+    def test_navigate_date_updates_date_label(self, screen_manager):
+        """Test _do_navigate_date updates the date label text"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        original_label = screen.date_label.text
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen._do_navigate_date(-1)
+
+        assert screen.date_label.text != original_label
+
+    def test_has_unsaved_changes_false_when_text_matches(self, screen_manager):
+        """Test _has_unsaved_changes returns False when field matches original"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen._original_text = "hello"
+        screen.journal_field.text = "hello"
+
+        assert screen._has_unsaved_changes() is False
+
+    def test_has_unsaved_changes_true_when_text_differs(self, screen_manager):
+        """Test _has_unsaved_changes returns True when field differs from original"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen._original_text = ""
+        screen.journal_field.text = "Something new"
+
+        assert screen._has_unsaved_changes() is True
+
+    def test_set_entry_text_updates_field_and_original(self, screen_manager):
+        """Test _set_entry_text populates field and resets original text"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen._set_entry_text("Today was great")
+
+        assert screen.journal_field.text == "Today was great"
+        assert screen._original_text == "Today was great"
+
+    def test_load_entry_spawns_thread(self, screen_manager):
+        """Test load_entry runs in a background thread"""
+        import datetime
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.load_entry(datetime.date.today())
+            mock_thread.assert_called_once()
+
+    def test_save_entry_updates_original_text(self, screen_manager):
+        """Test save_entry marks current text as saved"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen.journal_field.text = "My journal entry"
+        screen.save_entry()
+
+        assert screen._original_text == "My journal entry"
+        assert screen._has_unsaved_changes() is False
+
+    def test_go_back_without_changes_navigates_immediately(self, screen_manager):
+        """Test go_back navigates directly when there are no unsaved changes"""
+        from screens.journal import JournalScreen
+        from screens.home import HomeScreen
+
+        screen = JournalScreen(name="journal")
+        home = HomeScreen(name="home")
+        screen_manager.add_widget(screen)
+        screen_manager.add_widget(home)
+
+        screen._original_text = ""
+        screen.journal_field.text = ""
+        screen.go_back()
+
+        assert screen_manager.current == "home"
+
+    def test_go_back_with_changes_shows_discard_dialog(self, screen_manager):
+        """Test go_back calls _show_discard_dialog when unsaved changes exist"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen._original_text = ""
+        screen.journal_field.text = "Unsaved text"
+
+        with patch.object(screen, "_show_discard_dialog") as mock_show:
+            screen.go_back()
+            mock_show.assert_called_once()
+
+    def test_navigate_date_with_changes_shows_discard_dialog(self, screen_manager):
+        """Test navigate_date prompts for confirmation when unsaved changes exist"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen._original_text = ""
+        screen.journal_field.text = "Unsaved text"
+
+        with patch.object(screen, "_show_discard_dialog") as mock_show:
+            screen.navigate_date(-1)
+            mock_show.assert_called_once()
+
+    def test_navigate_date_without_changes_navigates_directly(self, screen_manager):
+        """Test navigate_date moves directly when there are no unsaved changes"""
+        import datetime
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen._original_text = ""
+        screen.journal_field.text = ""
+        initial_date = screen.current_date
+
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.navigate_date(-1)
+
+        assert screen.current_date == initial_date - datetime.timedelta(days=1)
+
+    def test_confirm_discard_calls_callback_and_closes_dialog(self, screen_manager):
+        """Test _confirm_discard dismisses dialog and invokes the callback"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen._dialog = MagicMock()
+        callback = MagicMock()
+        screen._confirm_discard(callback)
+
+        callback.assert_called_once()
+        assert screen._dialog is None
+
+    def test_show_discard_dialog_does_not_stack_on_double_tap(self, screen_manager):
+        """Test _show_discard_dialog is a no-op when a dialog is already open"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen._original_text = ""
+        screen.journal_field.text = "Unsaved text"
+
+        existing_dialog = MagicMock()
+        screen._dialog = existing_dialog
+
+        screen._show_discard_dialog(on_discard=MagicMock())
+
+        assert screen._dialog is existing_dialog
+
+    def test_do_navigate_date_cannot_advance_past_today(self, screen_manager):
+        """Test _do_navigate_date(1) is a no-op when already on today"""
+        import datetime
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        assert screen.current_date == datetime.date.today()
+        screen._do_navigate_date(1)
+        assert screen.current_date == datetime.date.today()
+
 
 class TestAnalysisScreen:
     """Tests for AnalysisScreen"""

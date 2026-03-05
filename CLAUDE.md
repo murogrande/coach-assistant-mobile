@@ -105,7 +105,7 @@ BG = (0.96, 0.96, 0.96, 1)
 | #4 | Create Home/Dashboard Screen | ✅ Done |
 | #5 | Implement Weekly Goals Screen UI | ✅ Done |
 | #6 | Implement Goals API Integration | ✅ Done |
-| #7 | Implement Daily Journal Screen UI | 🔶 Partial |
+| #7 | Implement Daily Journal Screen UI | ✅ Done |
 | #8 | Implement Journal API Integration | 🔲 Pending |
 | #9 | Implement Weekly Analysis Screen UI | 🔶 Partial |
 | #10 | Implement Analysis API Integration | 🔲 Pending |
@@ -120,7 +120,7 @@ BG = (0.96, 0.96, 0.96, 1)
 |-------|------|---------|
 | #4 Home | Layout, nav cards, navigation, username, stats, refresh | — |
 | #5 Goals | Layout, cards, checkboxes, add dialog, delete, empty state | — |
-| #7 Journal | Layout, text area, date display | Date selector/navigation, load existing entries, discard confirmation |
+| #7 Journal | Layout, text area, date nav (prev/next), load entries, discard dialog | — |
 | #9 Analysis | Layout, scrollable content, empty state, generate button | Week selector, analysis sections, loading state, share button |
 
 ## Authentication (Issue #3)
@@ -136,4 +136,4 @@ BG = (0.96, 0.96, 0.96, 1)
 - Always mock API calls using `unittest.mock.patch`
 - Use the `screen_manager` fixture from `conftest.py` for screen tests
 - Tests run headlessly (SDL dummy driver configured in `conftest.py`)
-- 61 tests currently passing
+- 80 tests currently passing
