@@ -175,7 +175,10 @@ class JournalScreen(MDScreen):
 
     def _do_navigate_date(self, delta):
         """Apply a day offset, refresh the header and load the new entry."""
-        self.current_date += datetime.timedelta(days=delta)
+        new_date = self.current_date + datetime.timedelta(days=delta)
+        if new_date > datetime.date.today():
+            return
+        self.current_date = new_date
         self.date_label.text = self._format_date(self.current_date)
         self._update_nav_buttons()
         self.journal_field.text = ""
@@ -223,6 +226,8 @@ class JournalScreen(MDScreen):
 
     def _show_discard_dialog(self, on_discard):
         """Open a confirmation dialog before discarding unsaved changes."""
+        if self._dialog:
+            return
         keep_btn = MDButton(style="text", on_release=lambda x: self._close_dialog())
         keep_btn.add_widget(MDButtonText(text="Keep editing"))
 

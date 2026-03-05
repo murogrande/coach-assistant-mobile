@@ -774,6 +774,35 @@ class TestJournalScreen:
         callback.assert_called_once()
         assert screen._dialog is None
 
+    def test_show_discard_dialog_does_not_stack_on_double_tap(self, screen_manager):
+        """Test _show_discard_dialog is a no-op when a dialog is already open"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen._original_text = ""
+        screen.journal_field.text = "Unsaved text"
+
+        existing_dialog = MagicMock()
+        screen._dialog = existing_dialog
+
+        screen._show_discard_dialog(on_discard=MagicMock())
+
+        assert screen._dialog is existing_dialog
+
+    def test_do_navigate_date_cannot_advance_past_today(self, screen_manager):
+        """Test _do_navigate_date(1) is a no-op when already on today"""
+        import datetime
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        assert screen.current_date == datetime.date.today()
+        screen._do_navigate_date(1)
+        assert screen.current_date == datetime.date.today()
+
 
 class TestAnalysisScreen:
     """Tests for AnalysisScreen"""
