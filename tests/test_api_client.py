@@ -1,11 +1,9 @@
 """Tests for API client"""
 
-import os
 import json
-import pytest
 from unittest.mock import patch, MagicMock
 
-from services.api_client import APIClient, api_client, TOKEN_FILE
+from services.api_client import APIClient, api_client
 
 
 class TestAPIClient:
@@ -54,7 +52,7 @@ class TestAPIClient:
         client = APIClient()
         with patch("services.api_client.open", create=True), \
              patch("services.api_client.json.dump"):
-            result = client.login("testuser", "password")
+            client.login("testuser", "password")
 
         assert client.token == "jwt-access-token"
         assert "Authorization" in client.headers
@@ -72,7 +70,7 @@ class TestAPIClient:
         client = APIClient()
         with patch("builtins.open", MagicMock()), \
              patch("services.api_client.json.dump"):
-            result = client.login("testuser", "password")
+            client.login("testuser", "password")
 
         assert client.token == "abc123"
         mock_post.assert_called_once()
@@ -156,6 +154,39 @@ class TestAPIClient:
 
         assert isinstance(result, list)
         assert len(result) == 1
+
+    @patch("services.api_client.requests.post")
+    def test_create_goal_includes_week_start_date(self, mock_post):
+        """Test create_goal sends week_start_date (Monday of current week)"""
+        from datetime import date, timedelta
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"id": 1, "goal_text": "Test goal"}
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        client = APIClient()
+        client.create_goal("Test goal")
+
+        payload = mock_post.call_args[1]["json"]
+        assert "week_start_date" in payload
+
+        today = date.today()
+        expected_monday = (today - timedelta(days=today.weekday())).isoformat()
+        assert payload["week_start_date"] == expected_monday
+
+    @patch("services.api_client.requests.delete")
+    def test_delete_goal(self, mock_delete):
+        """Test delete_goal sends DELETE request"""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_delete.return_value = mock_response
+
+        client = APIClient()
+        client.delete_goal(42)
+
+        mock_delete.assert_called_once()
+        assert "goals/42/" in mock_delete.call_args[0][0]
 
     @patch("services.api_client.requests.get")
     def test_get_journal_by_date_not_found(self, mock_get):

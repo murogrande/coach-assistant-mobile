@@ -22,6 +22,7 @@ BG = (0.96, 0.96, 0.96, 1)
 
 
 def _greeting() -> str:
+    """Return a time-appropriate greeting string based on the current hour."""
     hour = datetime.datetime.now().hour
     if 5 <= hour < 12:
         return "Good morning"
@@ -36,6 +37,13 @@ class StatCard(MDCard):
     """Small stats card for the dashboard"""
 
     def __init__(self, icon: str, value: str, label: str, **kwargs):
+        """Build the stat card with an icon, a numeric value, and a label.
+
+        Args:
+            icon: Material Design icon name.
+            value: Initial value string (e.g. "3/5").
+            label: Descriptive label shown below the value.
+        """
         super().__init__(
             orientation="vertical",
             padding=[16, 14, 16, 14],
@@ -79,6 +87,14 @@ class NavCard(MDCard):
     """Tappable card for home screen navigation"""
 
     def __init__(self, icon: str, title: str, subtitle: str, on_tap, **kwargs):
+        """Build the navigation card with icon, title, subtitle, and chevron.
+
+        Args:
+            icon: Material Design icon name.
+            title: Bold primary text.
+            subtitle: Secondary descriptive text.
+            on_tap: Callable invoked when the card is tapped.
+        """
         super().__init__(
             orientation="horizontal",
             padding=[20, 18, 20, 18],
@@ -130,6 +146,7 @@ class NavCard(MDCard):
         ))
 
     def on_touch_down(self, touch):
+        """Invoke the tap callback when the card is touched."""
         if self.collide_point(*touch.pos):
             self._on_tap()
             return True
@@ -140,10 +157,12 @@ class HomeScreen(MDScreen):
     """Main home screen with navigation to other sections"""
 
     def __init__(self, **kwargs):
+        """Initialise and build the home screen UI."""
         super().__init__(**kwargs)
         self.build_ui()
 
     def build_ui(self):
+        """Construct the full screen layout (header, stats, nav cards, logout)."""
         root = MDBoxLayout(orientation="vertical")
 
         # --- Hero header ---
@@ -277,12 +296,15 @@ class HomeScreen(MDScreen):
         threading.Thread(target=_fetch, daemon=True).start()
 
     def _update_stats(self, goals_value: str, journal_value: str):
+        """Update the goals and journal stat card values on the main thread."""
         self.goals_stat.value_label.text = goals_value
         self.journal_stat.value_label.text = journal_value
 
     def navigate(self, screen_name):
+        """Navigate to the given screen by name."""
         self.manager.current = screen_name
 
     def do_logout(self, *args):
+        """Clear the auth token and return to the login screen."""
         api_client.logout()
         self.manager.current = "login"

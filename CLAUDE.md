@@ -29,6 +29,7 @@ buildozer android deploy run
 python -m pytest tests/
 python -m pytest tests/ -q   # quiet
 python -m pytest tests/ -v   # verbose
+python -m pytest tests/test_screens.py::TestLoginScreen::test_login_screen_creation  # single test
 ```
 
 **Screenshot (for UI debugging):**
@@ -60,13 +61,28 @@ Import the singleton: `from services.api_client import api_client`
 
 Methods:
 - Auth: `login()`, `register()`
-- Goals: `get_goals()`, `create_goal()`, `update_goal()`
+- Goals: `get_goals()`, `create_goal()`, `update_goal()`, `delete_goal()`
 - Journal: `get_journal_entries()`, `get_journal_by_date()`, `create_journal_entry()`
 - Analysis: `generate_analysis()`, `get_latest_analysis()`
 
 **Backend URL**: Set `APIClient.API_BASE_URL` in `services/api_client.py`. For phone testing, use your computer's local IP instead of localhost.
 
 **Token format**: Backend returns `tokens.access` and `tokens.refresh` (not `token`). Use `Authorization: Bearer <access_token>`.
+
+## Screen Layout Pattern
+
+All screens follow this consistent structure:
+1. **Blue header** (`md_bg_color=BLUE`, `height=130`): horizontal top row with `MDIconButton(icon="arrow-left")` back button + title `MDLabel`, plus subtitle label below
+2. **Light gray content** (`md_bg_color=BG`): `MDScrollView` wrapping an `MDBoxLayout(adaptive_height=True)` with the main content
+3. **Fixed footer** (`md_bg_color=BG`, `height=80`): primary action `MDButton(style="filled", theme_width="Custom", size_hint_x=1)`
+
+Color constants used in every screen:
+```python
+BLUE = (0.129, 0.588, 0.953, 1)
+WHITE = (1, 1, 1, 1)
+WHITE_DIM = (1, 1, 1, 0.85)
+BG = (0.96, 0.96, 0.96, 1)
+```
 
 ## KivyMD 2.x Quirks
 
@@ -75,6 +91,7 @@ Methods:
   ```python
   field.add_widget(MDTextFieldLeadingIcon(icon="account"))
   ```
+- **`MDTextFieldTrailingIcon`** does not receive touch events (parent `MDTextField` consumes them) — use a standalone `MDIconButton` positioned over the field instead.
 - **`adaptive_width`** and **`leading_icon`** are NOT valid constructor parameters for MDButton/MDTextField in this version.
 - **Threading**: API calls must run in background threads. Use `threading.Thread` + `Clock.schedule_once` to update UI from the main thread.
 
@@ -87,7 +104,7 @@ Methods:
 | #3 | Implement Authentication Logic | ✅ Done |
 | #4 | Create Home/Dashboard Screen | ✅ Done |
 | #5 | Implement Weekly Goals Screen UI | ✅ Done |
-| #6 | Implement Goals API Integration | 🔲 Pending |
+| #6 | Implement Goals API Integration | ✅ Done |
 | #7 | Implement Daily Journal Screen UI | 🔶 Partial |
 | #8 | Implement Journal API Integration | 🔲 Pending |
 | #9 | Implement Weekly Analysis Screen UI | 🔶 Partial |
@@ -119,4 +136,4 @@ Methods:
 - Always mock API calls using `unittest.mock.patch`
 - Use the `screen_manager` fixture from `conftest.py` for screen tests
 - Tests run headlessly (SDL dummy driver configured in `conftest.py`)
-- 52 tests currently passing
+- 61 tests currently passing
