@@ -33,5 +33,10 @@ jobs:
       - name: Run pre-commit
         run: pre-commit run --all-files
 
+      - name: Start virtual display
+        run: Xvfb :99 -screen 0 1024x768x24 &
+
       - name: Run tests
+        env:
+          DISPLAY: ":99"
         run: python -m pytest tests/ -q
