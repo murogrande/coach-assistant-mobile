@@ -26,10 +26,12 @@ class AnalysisScreen(MDScreen):
     """Screen for viewing weekly AI analysis"""
 
     def __init__(self, **kwargs):
+        """Initialise and build the analysis screen UI."""
         super().__init__(**kwargs)
         self.build_ui()
 
     def build_ui(self):
+        """Construct the full screen layout (header, scrollable content, generate footer)."""
         root = MDBoxLayout(orientation="vertical")
 
         # --- Header ---
@@ -119,12 +121,15 @@ class AnalysisScreen(MDScreen):
         self.add_widget(root)
 
     def go_back(self):
+        """Navigate back to the home screen."""
         self.manager.current = "home"
 
     def generate_analysis(self, *args):
+        """Request a new weekly analysis from the API (Issue #10)."""
         # TODO: Call api_client.generate_analysis() (Issue #10)
         pass
 
     def load_latest(self):
+        """Load the most recent analysis from the API (Issue #10)."""
         # TODO: Call api_client.get_latest_analysis() (Issue #10)
         pass

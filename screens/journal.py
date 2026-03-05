@@ -20,10 +20,12 @@ class JournalScreen(MDScreen):
     """Screen for daily journal entries"""
 
     def __init__(self, **kwargs):
+        """Initialise and build the journal screen UI."""
         super().__init__(**kwargs)
         self.build_ui()
 
     def build_ui(self):
+        """Construct the full screen layout (header, text area, save footer)."""
         root = MDBoxLayout(orientation="vertical")
 
         today = datetime.date.today()
@@ -121,12 +123,15 @@ class JournalScreen(MDScreen):
         self.add_widget(root)
 
     def go_back(self):
+        """Navigate back to the home screen."""
         self.manager.current = "home"
 
     def save_entry(self, *args):
+        """Save the current journal entry via the API (Issue #8)."""
         # TODO: Call api_client.create_journal_entry() (Issue #8)
         pass
 
     def load_entry(self, date):
+        """Load the journal entry for the given date from the API (Issue #8)."""
         # TODO: Call api_client.get_journal_by_date() (Issue #8)
         pass

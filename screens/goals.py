@@ -31,6 +31,15 @@ class GoalCard(MDCard):
     """Card representing a single goal with checkbox and delete button"""
 
     def __init__(self, goal_text: str, goal_id, on_delete, on_toggle, completed: bool = False, **kwargs):
+        """Build the card with checkbox, label, and delete button.
+
+        Args:
+            goal_text: Text to display for the goal.
+            goal_id: Backend ID used for API calls, or None for local-only cards.
+            on_delete: Callback(card) invoked when the trash button is tapped.
+            on_toggle: Callback(card, completed) invoked when the checkbox changes.
+            completed: Initial checked state.
+        """
         super().__init__(
             orientation="horizontal",
             padding=[16, 14, 16, 14],
@@ -76,12 +85,14 @@ class GoalCard(MDCard):
         self.add_widget(self.delete_btn)
 
     def on_touch_down(self, touch):
+        """Toggle checkbox when the card body is tapped (excluding the delete button)."""
         if self.collide_point(*touch.pos) and not self.delete_btn.collide_point(*touch.pos):
             self.checkbox.active = not self.checkbox.active
             return True
         return super().on_touch_down(touch)
 
     def on_checkbox_change(self, instance, value):
+        """Update label style and notify the screen when the checkbox state changes."""
         self.goal_label.theme_text_color = "Secondary" if value else "Primary"
         self._on_toggle(self, value)
 
@@ -90,11 +101,13 @@ class GoalsScreen(MDScreen):
     """Screen for managing weekly goals"""
 
     def __init__(self, **kwargs):
+        """Initialise state and build the UI."""
         super().__init__(**kwargs)
         self._dialog = None
         self.build_ui()
 
     def build_ui(self):
+        """Construct the full screen layout (header, content, footer)."""
         root = MDBoxLayout(orientation="vertical")
 
         # --- Header ---
@@ -194,6 +207,7 @@ class GoalsScreen(MDScreen):
         self._refresh_empty_state()
 
     def on_pre_enter(self):
+        """Reload goals from the API each time the screen is shown."""
         self.load_goals()
 
     def load_goals(self):
@@ -222,6 +236,7 @@ class GoalsScreen(MDScreen):
             )
 
     def _add_goal_card(self, goal_text: str, goal_id=None, completed: bool = False):
+        """Create a GoalCard and append it to the list."""
         card = GoalCard(
             goal_text=goal_text,
             goal_id=goal_id,
@@ -266,13 +281,16 @@ class GoalsScreen(MDScreen):
         threading.Thread(target=_do, daemon=True).start()
 
     def _remove_card(self, card: "GoalCard"):
+        """Remove a card from the list and update the empty state."""
         self.goals_list.remove_widget(card)
         self._refresh_empty_state()
 
     def show_error(self, message: str):
+        """Display an error message in the status label."""
         self.status_label.text = message
 
     def show_add_dialog(self):
+        """Open the dialog for entering a new goal."""
         self.new_goal_field = MDTextField(
             mode="outlined",
             hint_text="Describe your goal...",
@@ -300,11 +318,13 @@ class GoalsScreen(MDScreen):
         Clock.schedule_once(lambda dt: setattr(self.new_goal_field, "focus", True), 0.1)
 
     def close_dialog(self, *args):
+        """Dismiss the active dialog and clear the reference."""
         if self._dialog:
             self._dialog.dismiss()
             self._dialog = None
 
     def confirm_add_goal(self, *args):
+        """Read the dialog input, close it, and create the goal via API."""
         text = self.new_goal_field.text.strip()
         self.close_dialog()
         if not text:
@@ -321,4 +341,5 @@ class GoalsScreen(MDScreen):
         threading.Thread(target=_do, daemon=True).start()
 
     def go_back(self):
+        """Navigate back to the home screen."""
         self.manager.current = "home"

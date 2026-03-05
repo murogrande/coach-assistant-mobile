@@ -19,11 +19,13 @@ class LoginScreen(MDScreen):
     """Login screen for user authentication"""
 
     def __init__(self, **kwargs):
+        """Initialise login/register state and build the UI."""
         super().__init__(**kwargs)
         self.is_register_mode = False
         self.build_ui()
 
     def build_ui(self):
+        """Construct the full screen layout (hero header and form card)."""
         # Root layout
         root = MDBoxLayout(orientation="vertical")
 
@@ -160,6 +162,7 @@ class LoginScreen(MDScreen):
     # ------------------------------------------------------------------
 
     def validate(self):
+        """Validate username and password fields. Returns True if inputs are valid."""
         username = self.username_field.text.strip()
         password = self.password_field.text
 
@@ -179,16 +182,20 @@ class LoginScreen(MDScreen):
     # ------------------------------------------------------------------
 
     def show_error(self, message):
+        """Display an error message below the form."""
         self.error_label.text = message
 
     def clear_error(self):
+        """Clear any displayed error message."""
         self.error_label.text = ""
 
     def toggle_password_visibility(self, *args):
+        """Toggle the password field between plain text and masked input."""
         self.password_field.password = not self.password_field.password
         self.eye_btn.icon = "eye-off" if not self.password_field.password else "eye"
 
     def toggle_mode(self, *args):
+        """Switch between login and register modes, updating all labels."""
         self.is_register_mode = not self.is_register_mode
         self.clear_error()
         if self.is_register_mode:
@@ -223,6 +230,7 @@ class LoginScreen(MDScreen):
     # ------------------------------------------------------------------
 
     def do_action(self, *args):
+        """Validate inputs then dispatch to do_login or do_register."""
         self.clear_error()
         if not self.validate():
             return
@@ -232,6 +240,7 @@ class LoginScreen(MDScreen):
             self.do_login()
 
     def do_login(self):
+        """Call the login API in a background thread."""
         username = self.username_field.text.strip()
         password = self.password_field.text
         self._set_loading(True)
@@ -247,6 +256,7 @@ class LoginScreen(MDScreen):
         threading.Thread(target=_login, daemon=True).start()
 
     def do_register(self):
+        """Register a new account then immediately log in, in a background thread."""
         username = self.username_field.text.strip()
         password = self.password_field.text
         self._set_loading(True)
@@ -263,9 +273,11 @@ class LoginScreen(MDScreen):
         threading.Thread(target=_register, daemon=True).start()
 
     def _on_auth_success(self):
+        """Re-enable the button and navigate to the home screen."""
         self._set_loading(False)
         self.manager.current = "home"
 
     def _on_auth_error(self, message: str):
+        """Re-enable the button and display the error message."""
         self._set_loading(False)
         self.show_error(message)

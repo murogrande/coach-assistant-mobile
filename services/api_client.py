@@ -20,6 +20,7 @@ class APIClient:
     API_BASE_URL = "http://localhost:8000/api"
 
     def __init__(self):
+        """Initialise the client with empty auth state."""
         self.token: Optional[str] = None
         self.username: Optional[str] = None
         self.headers = {
@@ -167,20 +168,20 @@ class APIClient:
         response.raise_for_status()
         return response.json()
 
-    def get_journal_by_date(self, date: str) -> Optional[Dict]:
+    def get_journal_by_date(self, date_str: str) -> Optional[Dict]:
         """Get journal entry for specific date (YYYY-MM-DD)"""
-        url = f"{self.API_BASE_URL}/journal/{date}/"
+        url = f"{self.API_BASE_URL}/journal/{date_str}/"
         response = requests.get(url, headers=self.headers)
         if response.status_code == 404:
             return None
         response.raise_for_status()
         return response.json()
 
-    def create_journal_entry(self, date: str, content: str, language: str = "en") -> Dict:
+    def create_journal_entry(self, date_str: str, content: str, language: str = "en") -> Dict:
         """Create new journal entry"""
         url = f"{self.API_BASE_URL}/journal/"
         data = {
-            "date": date,
+            "date": date_str,
             "content": content,
             "language": language
         }
