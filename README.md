@@ -33,7 +33,7 @@ coach-assistant-mobile/
 │   └── api_client.py       # REST API client singleton (auth, goals, journal, analysis)
 ├── utils/                  # Helper functions
 ├── assets/                 # Images, fonts, icons
-├── tests/                  # Test suite (78 tests)
+├── tests/                  # Test suite (80 tests)
 └── requirements.txt
 ```
 

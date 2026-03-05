@@ -136,4 +136,4 @@ BG = (0.96, 0.96, 0.96, 1)
 - Always mock API calls using `unittest.mock.patch`
 - Use the `screen_manager` fixture from `conftest.py` for screen tests
 - Tests run headlessly (SDL dummy driver configured in `conftest.py`)
-- 78 tests currently passing
+- 80 tests currently passing
