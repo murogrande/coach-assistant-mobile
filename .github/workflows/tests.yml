@@ -24,6 +24,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
             libgles2-mesa-dev libgstreamer1.0-dev \
+            libcairo2-dev pkg-config python3-dev \
             xvfb
 
       - name: Install Python dependencies
