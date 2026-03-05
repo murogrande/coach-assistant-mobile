@@ -1,13 +1,23 @@
 """Journal Screen"""
 
 import datetime
+import threading
 
+from kivy.clock import Clock
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.button import MDButton, MDButtonText, MDIconButton
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
+from kivymd.uix.dialog import (
+    MDDialog,
+    MDDialogHeadlineText,
+    MDDialogContentContainer,
+    MDDialogButtonContainer,
+)
 from kivymd.uix.textfield import MDTextField
+
+from services.api_client import api_client
 
 
 BLUE = (0.129, 0.588, 0.953, 1)
@@ -20,22 +30,22 @@ class JournalScreen(MDScreen):
     """Screen for daily journal entries"""
 
     def __init__(self, **kwargs):
-        """Initialise and build the journal screen UI."""
+        """Initialise state and build the journal screen UI."""
         super().__init__(**kwargs)
+        self.current_date = datetime.date.today()
+        self._original_text = ""
+        self._dialog = None
         self.build_ui()
 
     def build_ui(self):
         """Construct the full screen layout (header, text area, save footer)."""
         root = MDBoxLayout(orientation="vertical")
 
-        today = datetime.date.today()
-        date_str = today.strftime("%A, %B %d")
-
         # --- Header ---
         header = MDBoxLayout(
             orientation="vertical",
             size_hint=(1, None),
-            height=130,
+            height=160,
             padding=[16, 28, 16, 16],
             spacing=4,
             md_bg_color=BLUE,
@@ -58,15 +68,38 @@ class JournalScreen(MDScreen):
             pos_hint={"center_y": 0.5},
         ))
         header.add_widget(top_row)
+
+        # Date navigation row
+        date_nav = MDBoxLayout(orientation="horizontal", adaptive_height=True, spacing=4)
+        self.prev_btn = MDIconButton(
+            icon="chevron-left",
+            theme_icon_color="Custom",
+            icon_color=WHITE,
+            on_release=lambda x: self.navigate_date(-1),
+        )
+        date_nav.add_widget(self.prev_btn)
+
         self.date_label = MDLabel(
-            text=date_str,
+            text=self._format_date(self.current_date),
             font_style="Body",
             role="medium",
             theme_text_color="Custom",
             text_color=WHITE_DIM,
             adaptive_height=True,
+            halign="center",
+            pos_hint={"center_y": 0.5},
         )
-        header.add_widget(self.date_label)
+        date_nav.add_widget(self.date_label)
+
+        self.next_btn = MDIconButton(
+            icon="chevron-right",
+            theme_icon_color="Custom",
+            icon_color=WHITE,
+            on_release=lambda x: self.navigate_date(1),
+        )
+        date_nav.add_widget(self.next_btn)
+        header.add_widget(date_nav)
+        self._update_nav_buttons()
         root.add_widget(header)
 
         # --- Content ---
@@ -77,13 +110,12 @@ class JournalScreen(MDScreen):
             md_bg_color=BG,
         )
 
-        prompt_label = MDLabel(
+        content.add_widget(MDLabel(
             text="How was your day?",
             font_style="Title",
             role="small",
             adaptive_height=True,
-        )
-        content.add_widget(prompt_label)
+        ))
 
         card = MDCard(
             orientation="vertical",
@@ -122,16 +154,102 @@ class JournalScreen(MDScreen):
 
         self.add_widget(root)
 
-    def go_back(self):
-        """Navigate back to the home screen."""
-        self.manager.current = "home"
+    def _format_date(self, date):
+        """Return a human-readable date string."""
+        return date.strftime("%A, %B %d")
+
+    def _update_nav_buttons(self):
+        """Disable the next button when already on today's date."""
+        self.next_btn.disabled = self.current_date >= datetime.date.today()
+
+    def on_pre_enter(self):
+        """Load the journal entry for the current date each time the screen is shown."""
+        self.load_entry(self.current_date)
+
+    def navigate_date(self, delta):
+        """Navigate to the previous (-1) or next (+1) day, prompting if unsaved changes exist."""
+        if self._has_unsaved_changes():
+            self._show_discard_dialog(on_discard=lambda: self._do_navigate_date(delta))
+        else:
+            self._do_navigate_date(delta)
+
+    def _do_navigate_date(self, delta):
+        """Apply a day offset, refresh the header and load the new entry."""
+        self.current_date += datetime.timedelta(days=delta)
+        self.date_label.text = self._format_date(self.current_date)
+        self._update_nav_buttons()
+        self.journal_field.text = ""
+        self._original_text = ""
+        self.load_entry(self.current_date)
+
+    def _has_unsaved_changes(self):
+        """Return True if the text area content differs from the last saved/loaded text."""
+        return self.journal_field.text.strip() != self._original_text.strip()
+
+    def load_entry(self, date):
+        """Load the journal entry for the given date from the API (Issue #8)."""
+        date_str = date.isoformat()
+
+        def _do():
+            try:
+                entry = api_client.get_journal_by_date(date_str)
+                text = entry.get("content", "") if entry else ""
+            except Exception:
+                text = ""
+            Clock.schedule_once(lambda dt: self._set_entry_text(text))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _set_entry_text(self, text):
+        """Populate the text field and record the baseline for change detection."""
+        self.journal_field.text = text
+        self._original_text = text
 
     def save_entry(self, *args):
         """Save the current journal entry via the API (Issue #8)."""
         # TODO: Call api_client.create_journal_entry() (Issue #8)
-        pass
+        self._original_text = self.journal_field.text
 
-    def load_entry(self, date):
-        """Load the journal entry for the given date from the API (Issue #8)."""
-        # TODO: Call api_client.get_journal_by_date() (Issue #8)
-        pass
+    def go_back(self):
+        """Navigate back to home, showing a discard dialog if there are unsaved changes."""
+        if self._has_unsaved_changes():
+            self._show_discard_dialog(on_discard=self._navigate_back)
+        else:
+            self._navigate_back()
+
+    def _navigate_back(self):
+        """Perform the actual screen transition to home."""
+        self.manager.current = "home"
+
+    def _show_discard_dialog(self, on_discard):
+        """Open a confirmation dialog before discarding unsaved changes."""
+        keep_btn = MDButton(style="text", on_release=lambda x: self._close_dialog())
+        keep_btn.add_widget(MDButtonText(text="Keep editing"))
+
+        discard_btn = MDButton(style="text", on_release=lambda x: self._confirm_discard(on_discard))
+        discard_btn.add_widget(MDButtonText(text="Discard"))
+
+        self._dialog = MDDialog(
+            MDDialogHeadlineText(text="Discard changes?"),
+            MDDialogContentContainer(
+                MDLabel(
+                    text="Your unsaved changes will be lost.",
+                    adaptive_height=True,
+                ),
+                orientation="vertical",
+            ),
+            MDDialogButtonContainer(keep_btn, discard_btn),
+        )
+        self._dialog.open()
+
+    def _confirm_discard(self, on_discard):
+        """Close the dialog and run the discard callback."""
+        self._close_dialog()
+        self._original_text = self.journal_field.text
+        on_discard()
+
+    def _close_dialog(self):
+        """Dismiss the active dialog and clear the reference."""
+        if self._dialog:
+            self._dialog.dismiss()
+            self._dialog = None
