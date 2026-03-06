@@ -200,6 +200,22 @@ class TestAPIClient:
 
         assert result is None
 
+    @patch("services.api_client.requests.patch")
+    def test_update_journal_entry(self, mock_patch):
+        """Test update_journal_entry sends PATCH to /journal/{date}/"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"date": "2024-01-01", "content": "Updated"}
+        mock_patch.return_value = mock_response
+
+        client = APIClient()
+        result = client.update_journal_entry("2024-01-01", "Updated")
+
+        mock_patch.assert_called_once()
+        url = mock_patch.call_args[0][0]
+        assert "journal/2024-01-01/" in url
+        assert result["content"] == "Updated"
+
     @patch("services.api_client.requests.get")
     def test_get_latest_analysis_not_found(self, mock_get):
         """Test get_latest_analysis returns None for 404"""

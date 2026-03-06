@@ -686,14 +686,14 @@ class TestJournalScreen:
             mock_thread.assert_called_once()
 
     def test_save_entry_updates_original_text(self, screen_manager):
-        """Test save_entry marks current text as saved"""
+        """Test _on_save_success marks current text as saved"""
         from screens.journal import JournalScreen
 
         screen = JournalScreen(name="journal")
         screen_manager.add_widget(screen)
 
         screen.journal_field.text = "My journal entry"
-        screen.save_entry()
+        screen._on_save_success("My journal entry")
 
         assert screen._original_text == "My journal entry"
         assert screen._has_unsaved_changes() is False
@@ -802,6 +802,136 @@ class TestJournalScreen:
         assert screen.current_date == datetime.date.today()
         screen._do_navigate_date(1)
         assert screen.current_date == datetime.date.today()
+
+    def test_set_entry_text_sets_entry_exists_true_for_nonempty(self, screen_manager):
+        """Test _set_entry_text sets _entry_exists True when text is non-empty"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen._set_entry_text("Some content")
+
+        assert screen._entry_exists is True
+
+    def test_set_entry_text_sets_entry_exists_false_for_empty(self, screen_manager):
+        """Test _set_entry_text sets _entry_exists False when text is empty"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen._set_entry_text("")
+
+        assert screen._entry_exists is False
+
+    def test_save_entry_does_nothing_when_content_empty(self, screen_manager):
+        """Test save_entry is a no-op when the text field is empty"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen.journal_field.text = ""
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            screen.save_entry()
+            mock_thread.assert_not_called()
+
+    def test_save_entry_spawns_thread(self, screen_manager):
+        """Test save_entry runs API call in a background thread"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen.journal_field.text = "My entry"
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.save_entry()
+            mock_thread.assert_called_once()
+
+    def test_save_entry_disables_button_while_saving(self, screen_manager):
+        """Test save_entry disables the save button before the API call"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen.journal_field.text = "My entry"
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.save_entry()
+            assert screen.save_btn.disabled is True
+
+    def test_save_entry_calls_create_for_new_entry(self, screen_manager):
+        """Test save_entry calls create_journal_entry when entry does not exist"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen.journal_field.text = "New entry"
+        screen._entry_exists = False
+
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            screen.save_entry()
+        target_fn = mock_thread.call_args[1]["target"]
+        with patch("screens.journal.api_client") as mock_api:
+            with patch("screens.journal.Clock"):
+                target_fn()
+                mock_api.create_journal_entry.assert_called_once()
+                mock_api.update_journal_entry.assert_not_called()
+
+    def test_save_entry_calls_update_for_existing_entry(self, screen_manager):
+        """Test save_entry calls update_journal_entry when entry already exists"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen.journal_field.text = "Updated entry"
+        screen._entry_exists = True
+
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            screen.save_entry()
+        thread_call = mock_thread.call_args
+        target_fn = thread_call[1]["target"]
+        with patch("screens.journal.api_client") as mock_api:
+            with patch("screens.journal.Clock"):
+                target_fn()
+                mock_api.update_journal_entry.assert_called_once()
+                mock_api.create_journal_entry.assert_not_called()
+
+    def test_on_save_success_updates_state(self, screen_manager):
+        """Test _on_save_success re-enables button and marks entry as existing"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen.save_btn.disabled = True
+        screen._entry_exists = False
+
+        screen._on_save_success("My saved text")
+
+        assert screen._original_text == "My saved text"
+        assert screen._entry_exists is True
+        assert screen.save_btn.disabled is False
+        assert screen.status_label.text == "Saved"
+
+    def test_on_save_error_re_enables_button(self, screen_manager):
+        """Test _on_save_error re-enables the save button and shows error"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen.save_btn.disabled = True
+
+        screen._on_save_error("Connection refused")
+
+        assert screen.save_btn.disabled is False
+        assert "Connection refused" in screen.status_label.text
 
 
 class TestAnalysisScreen:

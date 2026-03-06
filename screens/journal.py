@@ -34,6 +34,7 @@ class JournalScreen(MDScreen):
         super().__init__(**kwargs)
         self.current_date = datetime.date.today()
         self._original_text = ""
+        self._entry_exists = False
         self._dialog = None
         self.build_ui()
 
@@ -138,17 +139,27 @@ class JournalScreen(MDScreen):
         footer = MDBoxLayout(
             orientation="vertical",
             size_hint=(1, None),
-            height=80,
-            padding=[16, 12, 16, 12],
+            height=100,
+            padding=[16, 8, 16, 12],
+            spacing=4,
             md_bg_color=BG,
         )
+        self.status_label = MDLabel(
+            text="",
+            font_style="Body",
+            role="small",
+            adaptive_height=True,
+            halign="center",
+        )
+        footer.add_widget(self.status_label)
         self.save_btn = MDButton(
             style="filled",
             theme_width="Custom",
             size_hint_x=1,
             on_release=self.save_entry,
         )
-        self.save_btn.add_widget(MDButtonText(text="Save Entry"))
+        self.save_btn_text = MDButtonText(text="Save Entry")
+        self.save_btn.add_widget(self.save_btn_text)
         footer.add_widget(self.save_btn)
         root.add_widget(footer)
 
@@ -207,11 +218,46 @@ class JournalScreen(MDScreen):
         """Populate the text field and record the baseline for change detection."""
         self.journal_field.text = text
         self._original_text = text
+        self._entry_exists = bool(text)
 
     def save_entry(self, *args):
         """Save the current journal entry via the API (Issue #8)."""
-        # TODO: Call api_client.create_journal_entry() (Issue #8)
-        self._original_text = self.journal_field.text
+        content = self.journal_field.text.strip()
+        if not content:
+            return
+        date_str = self.current_date.isoformat()
+        exists = self._entry_exists
+
+        self.save_btn.disabled = True
+        self.save_btn_text.text = "Saving..."
+        self.status_label.text = ""
+
+        def _do():
+            try:
+                if exists:
+                    api_client.update_journal_entry(date_str, content)
+                else:
+                    api_client.create_journal_entry(date_str, content)
+                Clock.schedule_once(lambda dt: self._on_save_success(content))
+            except Exception as e:
+                err = str(e)
+                Clock.schedule_once(lambda dt: self._on_save_error(err))
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_save_success(self, content):
+        """Handle successful save: update state and re-enable the button."""
+        self._original_text = content
+        self._entry_exists = True
+        self.save_btn.disabled = False
+        self.save_btn_text.text = "Save Entry"
+        self.status_label.text = "Saved"
+
+    def _on_save_error(self, error):
+        """Handle save failure: show error and re-enable the button."""
+        self.save_btn.disabled = False
+        self.save_btn_text.text = "Save Entry"
+        self.status_label.text = f"Error: {error}"
 
     def go_back(self):
         """Navigate back to home, showing a discard dialog if there are unsaved changes."""

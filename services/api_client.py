@@ -189,6 +189,14 @@ class APIClient:
         response.raise_for_status()
         return response.json()
 
+    def update_journal_entry(self, date_str: str, content: str) -> Dict:
+        """Update existing journal entry by date"""
+        url = f"{self.API_BASE_URL}/journal/{date_str}/"
+        data = {"content": content}
+        response = requests.patch(url, json=data, headers=self.headers)
+        response.raise_for_status()
+        return response.json()
+
     # Analysis endpoints
     def generate_analysis(self, week_start_date: str) -> Dict:
         """Request weekly analysis generation"""
