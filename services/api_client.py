@@ -170,7 +170,7 @@ class APIClient:
 
     def get_journal_by_date(self, date_str: str) -> Optional[Dict]:
         """Get journal entry for specific date (YYYY-MM-DD)"""
-        url = f"{self.API_BASE_URL}/journal/{date_str}/"
+        url = f"{self.API_BASE_URL}/journal/by-date/{date_str}/"
         response = requests.get(url, headers=self.headers)
         if response.status_code == 404:
             return None
@@ -186,6 +186,14 @@ class APIClient:
             "language": language
         }
         response = requests.post(url, json=data, headers=self.headers)
+        response.raise_for_status()
+        return response.json()
+
+    def update_journal_entry(self, entry_id: int, content: str) -> Dict:
+        """Update existing journal entry by ID"""
+        url = f"{self.API_BASE_URL}/journal/{entry_id}/"
+        data = {"content": content}
+        response = requests.patch(url, json=data, headers=self.headers)
         response.raise_for_status()
         return response.json()
 

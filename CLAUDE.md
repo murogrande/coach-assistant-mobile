@@ -62,12 +62,24 @@ Import the singleton: `from services.api_client import api_client`
 Methods:
 - Auth: `login()`, `register()`
 - Goals: `get_goals()`, `create_goal()`, `update_goal()`, `delete_goal()`
-- Journal: `get_journal_entries()`, `get_journal_by_date()`, `create_journal_entry()`
+- Journal: `get_journal_entries()`, `get_journal_by_date(date_str)`, `create_journal_entry(date_str, content)`, `update_journal_entry(entry_id, content)`
 - Analysis: `generate_analysis()`, `get_latest_analysis()`
 
 **Backend URL**: Set `APIClient.API_BASE_URL` in `services/api_client.py`. For phone testing, use your computer's local IP instead of localhost.
 
 **Token format**: Backend returns `tokens.access` and `tokens.refresh` (not `token`). Use `Authorization: Bearer <access_token>`.
+
+### Backend API endpoints (verified)
+
+Always check `../coach-assistant-backend/api/views.py` before implementing new API calls.
+
+| Resource | Endpoint | Notes |
+|---|---|---|
+| Journal list/create | `GET/POST /api/journal/` | |
+| Journal by date | `GET /api/journal/by-date/{YYYY-MM-DD}/` | Returns single entry or 404 |
+| Journal by ID | `GET/PATCH/DELETE /api/journal/{id}/` | Use numeric id, NOT date |
+| Goals | `GET/POST /api/goals/`, `PATCH /api/goals/{id}/` | |
+| Analysis | `POST /api/analysis/generate/`, `GET /api/analysis/latest/` | |
 
 ## Screen Layout Pattern
 
@@ -94,6 +106,7 @@ BG = (0.96, 0.96, 0.96, 1)
 - **`MDTextFieldTrailingIcon`** does not receive touch events (parent `MDTextField` consumes them) — use a standalone `MDIconButton` positioned over the field instead.
 - **`adaptive_width`** and **`leading_icon`** are NOT valid constructor parameters for MDButton/MDTextField in this version.
 - **Threading**: API calls must run in background threads. Use `threading.Thread` + `Clock.schedule_once` to update UI from the main thread.
+- **`MDTextField multiline=True`** has rendering issues (text may not appear) — use native Kivy `TextInput` for multiline content areas instead.
 
 ## Issue Progress
 
@@ -106,7 +119,7 @@ BG = (0.96, 0.96, 0.96, 1)
 | #5 | Implement Weekly Goals Screen UI | ✅ Done |
 | #6 | Implement Goals API Integration | ✅ Done |
 | #7 | Implement Daily Journal Screen UI | ✅ Done |
-| #8 | Implement Journal API Integration | 🔲 Pending |
+| #8 | Implement Journal API Integration | ✅ Done |
 | #9 | Implement Weekly Analysis Screen UI | 🔶 Partial |
 | #10 | Implement Analysis API Integration | 🔲 Pending |
 | #15 | Setup Buildozer for Android Build | 🔲 Pending |
@@ -118,9 +131,6 @@ BG = (0.96, 0.96, 0.96, 1)
 
 | Issue | Done | Missing |
 |-------|------|---------|
-| #4 Home | Layout, nav cards, navigation, username, stats, refresh | — |
-| #5 Goals | Layout, cards, checkboxes, add dialog, delete, empty state | — |
-| #7 Journal | Layout, text area, date nav (prev/next), load entries, discard dialog | — |
 | #9 Analysis | Layout, scrollable content, empty state, generate button | Week selector, analysis sections, loading state, share button |
 
 ## Authentication (Issue #3)
@@ -136,4 +146,6 @@ BG = (0.96, 0.96, 0.96, 1)
 - Always mock API calls using `unittest.mock.patch`
 - Use the `screen_manager` fixture from `conftest.py` for screen tests
 - Tests run headlessly (SDL dummy driver configured in `conftest.py`)
-- 80 tests currently passing
+- 95 tests currently passing
+- Unit tests: `tests/test_screens.py`, `tests/test_api_client.py`
+- End-to-end flow tests: `tests/end_to_end.py` (journal and goals full cycles)

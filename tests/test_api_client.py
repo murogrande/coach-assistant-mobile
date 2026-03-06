@@ -190,7 +190,7 @@ class TestAPIClient:
 
     @patch("services.api_client.requests.get")
     def test_get_journal_by_date_not_found(self, mock_get):
-        """Test get_journal_by_date returns None for 404"""
+        """Test get_journal_by_date returns None on 404"""
         mock_response = MagicMock()
         mock_response.status_code = 404
         mock_get.return_value = mock_response
@@ -199,6 +199,36 @@ class TestAPIClient:
         result = client.get_journal_by_date("2024-01-01")
 
         assert result is None
+        assert "journal/by-date/2024-01-01/" in mock_get.call_args[0][0]
+
+    @patch("services.api_client.requests.get")
+    def test_get_journal_by_date_found(self, mock_get):
+        """Test get_journal_by_date returns the entry when found"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"id": 5, "date": "2024-01-01", "content": "Hello"}
+        mock_get.return_value = mock_response
+
+        client = APIClient()
+        result = client.get_journal_by_date("2024-01-01")
+
+        assert result == {"id": 5, "date": "2024-01-01", "content": "Hello"}
+
+    @patch("services.api_client.requests.patch")
+    def test_update_journal_entry(self, mock_patch):
+        """Test update_journal_entry sends PATCH to /journal/{id}/"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"id": 5, "content": "Updated"}
+        mock_patch.return_value = mock_response
+
+        client = APIClient()
+        result = client.update_journal_entry(5, "Updated")
+
+        mock_patch.assert_called_once()
+        url = mock_patch.call_args[0][0]
+        assert "journal/5/" in url
+        assert result["content"] == "Updated"
 
     @patch("services.api_client.requests.get")
     def test_get_latest_analysis_not_found(self, mock_get):
