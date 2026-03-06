@@ -33,7 +33,11 @@ coach-assistant-mobile/
 │   └── api_client.py       # REST API client singleton (auth, goals, journal, analysis)
 ├── utils/                  # Helper functions
 ├── assets/                 # Images, fonts, icons
-├── tests/                  # Test suite (80 tests)
+├── tests/
+│   ├── conftest.py         # Headless KivyMD setup, screen_manager fixture
+│   ├── test_screens.py     # Unit tests for all screens
+│   ├── test_api_client.py  # Unit tests for API client
+│   └── end_to_end.py       # End-to-end flow tests (journal + goals)
 └── requirements.txt
 ```
 
@@ -82,8 +86,9 @@ buildozer android deploy run
 
 ```bash
 python -m pytest tests/
-python -m pytest tests/ -q      # quiet
-python -m pytest tests/ -v      # verbose
+python -m pytest tests/ -q                  # quiet
+python -m pytest tests/ -v                  # verbose
+python -m pytest tests/end_to_end.py -v     # end-to-end flows only
 ```
 
 ## Current Status
@@ -93,13 +98,14 @@ python -m pytest tests/ -v      # verbose
 - ✅ **Issue #2** — Login screen UI: hero header, form card, field icons, validation, register toggle, password visibility toggle
 - ✅ **Issue #3** — Authentication logic: login/register API calls (threaded), JWT token persistence, auto-login on start, error messages
 - ✅ **Issue #4** — Home dashboard: greeting, username, stats cards (goals/journal), refresh button, navigation cards
+- ✅ **Issue #5** — Goals screen: goal cards with checkboxes, add goal dialog, delete, empty state
+- ✅ **Issue #6** — Goals API integration: load, create, toggle complete, delete (all threaded)
+- ✅ **Issue #7** — Journal screen UI: text area, date navigation (prev/next), load existing entries, discard confirmation dialog
+- ✅ **Issue #8** — Journal API integration: load entry by date, save (create/update), loading feedback, entry id tracking
 
 ### In Progress / Next
-- ✅ **Issue #5** — Goals screen: goal cards with checkboxes, add goal dialog, delete, empty state
-- ✅ **Issue #6** — Goals API integration
-- ✅ **Issue #7** — Journal screen UI: text area, date navigation (prev/next), load existing entries, discard confirmation dialog
-- 🔲 **Issue #8** — Journal API integration (save/load entries)
-- 🔲 **Issue #9–10** — Analysis screen UI + API integration
+- 🔶 **Issue #9** — Analysis screen UI (partial: layout, empty state, generate button — missing week selector, sections, share)
+- 🔲 **Issue #10** — Analysis API integration
 - 🔲 **Issue #15–16** — Buildozer Android build + device testing
 
 **Milestone "POC Ready"** = Issues #1–10, then #15–16 to get on phone.
@@ -117,8 +123,8 @@ python -m pytest tests/ -v      # verbose
 This app requires the `coach-assistant-backend` Django REST API. See that repository for setup instructions. The backend exposes:
 
 - `POST /api/auth/login/` and `/api/auth/register/`
-- `GET/POST /api/goals/`
-- `GET/POST /api/journal/`
+- `GET/POST /api/goals/`, `PATCH/DELETE /api/goals/{id}/`
+- `GET/POST /api/journal/`, `GET /api/journal/by-date/{YYYY-MM-DD}/`, `PATCH /api/journal/{id}/`
 - `POST /api/analysis/generate/`, `GET /api/analysis/latest/`
 
 Token format: `{ "tokens": { "access": "...", "refresh": "..." } }`
