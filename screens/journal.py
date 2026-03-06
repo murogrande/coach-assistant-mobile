@@ -209,6 +209,7 @@ class JournalScreen(MDScreen):
     def load_entry(self, date):
         """Load the journal entry for the given date from the API (Issue #8)."""
         date_str = date.isoformat()
+        self.status_label.text = "Loading..."
 
         def _do():
             try:
@@ -227,12 +228,14 @@ class JournalScreen(MDScreen):
         self.journal_field.text = text
         self._original_text = text
         self._entry_id = entry_id
+        self.status_label.text = ""
 
     def save_entry(self, *args):
         """Save the current journal entry via the API (Issue #8)."""
         content = self.journal_field.text.strip()
         if not content:
             return
+        self.journal_field.text = content
         date_str = self.current_date.isoformat()
         entry_id = self._entry_id
 
@@ -248,9 +251,8 @@ class JournalScreen(MDScreen):
                     result = api_client.create_journal_entry(date_str, content)
                 new_id = result.get("id", entry_id)
                 Clock.schedule_once(lambda dt: self._on_save_success(content, new_id))
-            except Exception as e:
-                err = str(e)
-                Clock.schedule_once(lambda dt: self._on_save_error(err))
+            except Exception:
+                Clock.schedule_once(lambda dt: self._on_save_error())
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -261,12 +263,13 @@ class JournalScreen(MDScreen):
         self.save_btn.disabled = False
         self.save_btn_text.text = "Save Entry"
         self.status_label.text = "Saved"
+        Clock.schedule_once(lambda dt: setattr(self.status_label, "text", ""), 2.5)
 
-    def _on_save_error(self, error):
+    def _on_save_error(self):
         """Handle save failure: show error and re-enable the button."""
         self.save_btn.disabled = False
         self.save_btn_text.text = "Save Entry"
-        self.status_label.text = f"Error: {error}"
+        self.status_label.text = "Could not save. Please try again."
 
     def go_back(self):
         """Navigate back to home, showing a discard dialog if there are unsaved changes."""

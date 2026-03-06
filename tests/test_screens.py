@@ -921,7 +921,7 @@ class TestJournalScreen:
         assert screen.status_label.text == "Saved"
 
     def test_on_save_error_re_enables_button(self, screen_manager):
-        """Test _on_save_error re-enables the save button and shows error"""
+        """Test _on_save_error re-enables the save button and shows a friendly message"""
         from screens.journal import JournalScreen
 
         screen = JournalScreen(name="journal")
@@ -929,10 +929,67 @@ class TestJournalScreen:
 
         screen.save_btn.disabled = True
 
-        screen._on_save_error("Connection refused")
+        screen._on_save_error()
 
         assert screen.save_btn.disabled is False
-        assert "Connection refused" in screen.status_label.text
+        assert screen.status_label.text == "Could not save. Please try again."
+
+    def test_load_entry_shows_loading_status(self, screen_manager):
+        """Test load_entry sets status label to Loading... before the API call"""
+        import datetime
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.load_entry(datetime.date.today())
+
+        assert screen.status_label.text == "Loading..."
+
+    def test_set_entry_text_clears_loading_status(self, screen_manager):
+        """Test _set_entry_text clears the loading status label"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen.status_label.text = "Loading..."
+        screen._set_entry_text("Some content", entry_id=1)
+
+        assert screen.status_label.text == ""
+
+    def test_save_entry_strips_whitespace_in_field(self, screen_manager):
+        """Test save_entry syncs stripped content back to the text field"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        screen.journal_field.text = "  My entry   "
+        with patch("screens.journal.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.save_entry()
+
+        assert screen.journal_field.text == "My entry"
+
+    def test_on_save_success_clears_status_after_delay(self, screen_manager):
+        """Test _on_save_success schedules status label clear after 2.5s"""
+        from screens.journal import JournalScreen
+
+        screen = JournalScreen(name="journal")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.journal.Clock") as mock_clock:
+            screen._on_save_success("text", entry_id=1)
+
+        assert screen.status_label.text == "Saved"
+        # Two Clock.schedule_once calls: one from the thread, one for the clear
+        assert mock_clock.schedule_once.call_count == 1
+        # Trigger the scheduled clear and verify it resets the label
+        mock_clock.schedule_once.call_args[0][0](0)
+        assert screen.status_label.text == ""
 
 class TestAnalysisScreen:
     """Tests for AnalysisScreen"""
