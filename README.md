@@ -102,13 +102,15 @@ python -m pytest tests/end_to_end.py -v     # end-to-end flows only
 - ✅ **Issue #6** — Goals API integration: load, create, toggle complete, delete (all threaded)
 - ✅ **Issue #7** — Journal screen UI: text area, date navigation (prev/next), load existing entries, discard confirmation dialog
 - ✅ **Issue #8** — Journal API integration: load entry by date, save (create/update), loading feedback, entry id tracking
+- ✅ **Issue #9** — Analysis screen UI: week selector, 6 section cards (Summary, Achievements, Improvements, Time, Habits, Blind Spots), loading spinner, empty state, display helpers
 
-### In Progress / Next
-- 🔶 **Issue #9** — Analysis screen UI (partial: layout, empty state, generate button — missing week selector, sections, share)
-- 🔲 **Issue #10** — Analysis API integration
+### Next
+- 🔲 **Issue #10** — Analysis API integration (wire up `generate_analysis` + `get_latest_analysis`)
 - 🔲 **Issue #15–16** — Buildozer Android build + device testing
+- 🔲 **Issue #21–23** — Multi-provider analysis (OpenAI / Claude / Local Qwen3) — requires backend #39–42 first
 
 **Milestone "POC Ready"** = Issues #1–10, then #15–16 to get on phone.
+**Milestone "Multi-Provider"** = Backend #39–42 → Mobile #21–23.
 
 ## Authentication Flow
 
