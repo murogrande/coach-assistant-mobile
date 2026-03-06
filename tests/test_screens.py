@@ -803,27 +803,27 @@ class TestJournalScreen:
         screen._do_navigate_date(1)
         assert screen.current_date == datetime.date.today()
 
-    def test_set_entry_text_sets_entry_exists_true_for_nonempty(self, screen_manager):
-        """Test _set_entry_text sets _entry_exists True when text is non-empty"""
+    def test_set_entry_text_stores_entry_id(self, screen_manager):
+        """Test _set_entry_text stores the entry id"""
         from screens.journal import JournalScreen
 
         screen = JournalScreen(name="journal")
         screen_manager.add_widget(screen)
 
-        screen._set_entry_text("Some content")
+        screen._set_entry_text("Some content", entry_id=42)
 
-        assert screen._entry_exists is True
+        assert screen._entry_id == 42
 
-    def test_set_entry_text_sets_entry_exists_false_for_empty(self, screen_manager):
-        """Test _set_entry_text sets _entry_exists False when text is empty"""
+    def test_set_entry_text_clears_entry_id_for_empty(self, screen_manager):
+        """Test _set_entry_text clears entry_id when no entry"""
         from screens.journal import JournalScreen
 
         screen = JournalScreen(name="journal")
         screen_manager.add_widget(screen)
 
-        screen._set_entry_text("")
+        screen._set_entry_text("", entry_id=None)
 
-        assert screen._entry_exists is False
+        assert screen._entry_id is None
 
     def test_save_entry_does_nothing_when_content_empty(self, screen_manager):
         """Test save_entry is a no-op when the text field is empty"""
@@ -863,59 +863,60 @@ class TestJournalScreen:
             screen.save_entry()
             assert screen.save_btn.disabled is True
 
-    def test_save_entry_calls_create_for_new_entry(self, screen_manager):
-        """Test save_entry calls create_journal_entry when entry does not exist"""
+    def test_save_entry_calls_create_when_no_entry_id(self, screen_manager):
+        """Test save_entry calls create_journal_entry when no entry_id is set"""
         from screens.journal import JournalScreen
 
         screen = JournalScreen(name="journal")
         screen_manager.add_widget(screen)
 
-        screen.journal_field.text = "New entry"
-        screen._entry_exists = False
+        screen.journal_field.text = "My entry"
+        screen._entry_id = None
 
         with patch("screens.journal.threading.Thread") as mock_thread:
             screen.save_entry()
         target_fn = mock_thread.call_args[1]["target"]
         with patch("screens.journal.api_client") as mock_api:
+            mock_api.create_journal_entry.return_value = {"id": 10, "content": "My entry"}
             with patch("screens.journal.Clock"):
                 target_fn()
                 mock_api.create_journal_entry.assert_called_once()
                 mock_api.update_journal_entry.assert_not_called()
 
-    def test_save_entry_calls_update_for_existing_entry(self, screen_manager):
-        """Test save_entry calls update_journal_entry when entry already exists"""
+    def test_save_entry_calls_update_when_entry_id_set(self, screen_manager):
+        """Test save_entry calls update_journal_entry when entry_id is known"""
         from screens.journal import JournalScreen
 
         screen = JournalScreen(name="journal")
         screen_manager.add_widget(screen)
 
         screen.journal_field.text = "Updated entry"
-        screen._entry_exists = True
+        screen._entry_id = 42
 
         with patch("screens.journal.threading.Thread") as mock_thread:
             screen.save_entry()
-        thread_call = mock_thread.call_args
-        target_fn = thread_call[1]["target"]
+        target_fn = mock_thread.call_args[1]["target"]
         with patch("screens.journal.api_client") as mock_api:
+            mock_api.update_journal_entry.return_value = {"id": 42, "content": "Updated entry"}
             with patch("screens.journal.Clock"):
                 target_fn()
-                mock_api.update_journal_entry.assert_called_once()
+                mock_api.update_journal_entry.assert_called_once_with(42, "Updated entry")
                 mock_api.create_journal_entry.assert_not_called()
 
     def test_on_save_success_updates_state(self, screen_manager):
-        """Test _on_save_success re-enables button and marks entry as existing"""
+        """Test _on_save_success re-enables button and stores entry_id"""
         from screens.journal import JournalScreen
 
         screen = JournalScreen(name="journal")
         screen_manager.add_widget(screen)
 
         screen.save_btn.disabled = True
-        screen._entry_exists = False
+        screen._entry_id = None
 
-        screen._on_save_success("My saved text")
+        screen._on_save_success("My saved text", entry_id=99)
 
         assert screen._original_text == "My saved text"
-        assert screen._entry_exists is True
+        assert screen._entry_id == 99
         assert screen.save_btn.disabled is False
         assert screen.status_label.text == "Saved"
 
@@ -932,7 +933,6 @@ class TestJournalScreen:
 
         assert screen.save_btn.disabled is False
         assert "Connection refused" in screen.status_label.text
-
 
 class TestAnalysisScreen:
     """Tests for AnalysisScreen"""

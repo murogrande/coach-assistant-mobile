@@ -15,7 +15,7 @@ from kivymd.uix.dialog import (
     MDDialogContentContainer,
     MDDialogButtonContainer,
 )
-from kivymd.uix.textfield import MDTextField
+from kivy.uix.textinput import TextInput
 
 from services.api_client import api_client
 
@@ -34,7 +34,7 @@ class JournalScreen(MDScreen):
         super().__init__(**kwargs)
         self.current_date = datetime.date.today()
         self._original_text = ""
-        self._entry_exists = False
+        self._entry_id = None
         self._dialog = None
         self.build_ui()
 
@@ -120,15 +120,20 @@ class JournalScreen(MDScreen):
 
         card = MDCard(
             orientation="vertical",
-            padding=[4, 4, 4, 4],
+            padding=[12, 12, 12, 12],
             style="elevated",
             elevation=1,
         )
-        self.journal_field = MDTextField(
-            mode="outlined",
-            multiline=True,
+        self.journal_field = TextInput(
             hint_text="Write about your day, thoughts, feelings...",
+            multiline=True,
             size_hint=(1, 1),
+            background_color=(1, 1, 1, 1),
+            foreground_color=(0.1, 0.1, 0.1, 1),
+            hint_text_color=(0.6, 0.6, 0.6, 1),
+            cursor_color=(0.129, 0.588, 0.953, 1),
+            font_size="16sp",
+            padding=[8, 8, 8, 8],
         )
         card.add_widget(self.journal_field)
         content.add_widget(card)
@@ -194,6 +199,7 @@ class JournalScreen(MDScreen):
         self._update_nav_buttons()
         self.journal_field.text = ""
         self._original_text = ""
+        self._entry_id = None
         self.load_entry(self.current_date)
 
     def _has_unsaved_changes(self):
@@ -208,17 +214,19 @@ class JournalScreen(MDScreen):
             try:
                 entry = api_client.get_journal_by_date(date_str)
                 text = entry.get("content", "") if entry else ""
+                entry_id = entry.get("id") if entry else None
             except Exception:
                 text = ""
-            Clock.schedule_once(lambda dt: self._set_entry_text(text))
+                entry_id = None
+            Clock.schedule_once(lambda dt: self._set_entry_text(text, entry_id))
 
         threading.Thread(target=_do, daemon=True).start()
 
-    def _set_entry_text(self, text):
+    def _set_entry_text(self, text, entry_id=None):
         """Populate the text field and record the baseline for change detection."""
         self.journal_field.text = text
         self._original_text = text
-        self._entry_exists = bool(text)
+        self._entry_id = entry_id
 
     def save_entry(self, *args):
         """Save the current journal entry via the API (Issue #8)."""
@@ -226,7 +234,7 @@ class JournalScreen(MDScreen):
         if not content:
             return
         date_str = self.current_date.isoformat()
-        exists = self._entry_exists
+        entry_id = self._entry_id
 
         self.save_btn.disabled = True
         self.save_btn_text.text = "Saving..."
@@ -234,21 +242,22 @@ class JournalScreen(MDScreen):
 
         def _do():
             try:
-                if exists:
-                    api_client.update_journal_entry(date_str, content)
+                if entry_id:
+                    result = api_client.update_journal_entry(entry_id, content)
                 else:
-                    api_client.create_journal_entry(date_str, content)
-                Clock.schedule_once(lambda dt: self._on_save_success(content))
+                    result = api_client.create_journal_entry(date_str, content)
+                new_id = result.get("id", entry_id)
+                Clock.schedule_once(lambda dt: self._on_save_success(content, new_id))
             except Exception as e:
                 err = str(e)
                 Clock.schedule_once(lambda dt: self._on_save_error(err))
 
         threading.Thread(target=_do, daemon=True).start()
 
-    def _on_save_success(self, content):
+    def _on_save_success(self, content, entry_id=None):
         """Handle successful save: update state and re-enable the button."""
         self._original_text = content
-        self._entry_exists = True
+        self._entry_id = entry_id
         self.save_btn.disabled = False
         self.save_btn_text.text = "Save Entry"
         self.status_label.text = "Saved"
