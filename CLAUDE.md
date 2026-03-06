@@ -63,7 +63,7 @@ Methods:
 - Auth: `login()`, `register()`
 - Goals: `get_goals()`, `create_goal()`, `update_goal()`, `delete_goal()`
 - Journal: `get_journal_entries()`, `get_journal_by_date(date_str)`, `create_journal_entry(date_str, content)`, `update_journal_entry(entry_id, content)`
-- Analysis: `generate_analysis()`, `get_latest_analysis()`
+- Analysis: `generate_analysis(week_start_date)`, `get_latest_analysis()`
 
 **Backend URL**: Set `APIClient.API_BASE_URL` in `services/api_client.py`. For phone testing, use your computer's local IP instead of localhost.
 
@@ -79,7 +79,9 @@ Always check `../coach-assistant-backend/api/views.py` before implementing new A
 | Journal by date | `GET /api/journal/by-date/{YYYY-MM-DD}/` | Returns single entry or 404 |
 | Journal by ID | `GET/PATCH/DELETE /api/journal/{id}/` | Use numeric id, NOT date |
 | Goals | `GET/POST /api/goals/`, `PATCH /api/goals/{id}/` | |
-| Analysis | `POST /api/analysis/generate/`, `GET /api/analysis/latest/` | |
+| Analysis generate | `POST /api/analysis/generate/` | Body: `{week_start_date, provider}` (provider optional, default `"openai"`) |
+| Analysis latest | `GET /api/analysis/latest/` | Query: `?provider=openai\|anthropic\|local` (optional) |
+| Analysis list | `GET /api/analysis/` | Returns all analyses (pending backend #42) |
 
 ## Screen Layout Pattern
 
@@ -87,6 +89,8 @@ All screens follow this consistent structure:
 1. **Blue header** (`md_bg_color=BLUE`, `height=130`): horizontal top row with `MDIconButton(icon="arrow-left")` back button + title `MDLabel`, plus subtitle label below
 2. **Light gray content** (`md_bg_color=BG`): `MDScrollView` wrapping an `MDBoxLayout(adaptive_height=True)` with the main content
 3. **Fixed footer** (`md_bg_color=BG`, `height=80`): primary action `MDButton(style="filled", theme_width="Custom", size_hint_x=1)`
+
+**Analysis screen exception**: has an extra blue strip (`height=48`) below the header for the week selector (`<` / `>` navigation + week range label).
 
 Color constants used in every screen:
 ```python
@@ -120,18 +124,25 @@ BG = (0.96, 0.96, 0.96, 1)
 | #6 | Implement Goals API Integration | ✅ Done |
 | #7 | Implement Daily Journal Screen UI | ✅ Done |
 | #8 | Implement Journal API Integration | ✅ Done |
-| #9 | Implement Weekly Analysis Screen UI | 🔶 Partial |
+| #9 | Implement Weekly Analysis Screen UI | ✅ Done |
 | #10 | Implement Analysis API Integration | 🔲 Pending |
 | #15 | Setup Buildozer for Android Build | 🔲 Pending |
 | #16 | Test on Android Device | 🔲 Pending |
+| #21 | Multi-Provider Support in API Client | 🔲 Pending |
+| #22 | Provider Selector UI on Analysis Screen | 🔲 Pending |
+| #23 | Compare Analyses from Multiple Providers | 🔲 Pending |
 
 **Milestone "POC Ready"** = Issues #1–10, then #15–16 to get on phone.
+**Milestone "Multi-Provider"** = Issues #21–23 (mobile) + #39–42 (backend). Requires backend work first.
 
-### Partial UI progress (screens redesigned but not feature-complete)
+### Analysis screen (Issue #9) — what's implemented
 
-| Issue | Done | Missing |
-|-------|------|---------|
-| #9 Analysis | Layout, scrollable content, empty state, generate button | Week selector, analysis sections, loading state, share button |
+- Blue header + week selector strip (`<` week range `>`)
+- 6 section cards (hidden until data loads): Summary, Goal Achievements, Improvement Suggestions, Time Analysis, Habits Analysis, Blind Spots
+- Loading spinner (`MDCircularProgressIndicator`) + message
+- Empty state card with placeholder text
+- Display helpers: `show_analysis(data)`, `show_loading(bool)`, `show_empty_state()`
+- `analysis_text` attribute preserved for test compatibility
 
 ## Authentication (Issue #3)
 
