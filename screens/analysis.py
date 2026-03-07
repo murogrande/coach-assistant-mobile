@@ -57,6 +57,7 @@ class AnalysisScreen(MDScreen):
         self._section_cards = {}
         self._section_labels = {}
         self._dialog = None
+        self._active = False
         self.build_ui()
 
     def build_ui(self):
@@ -77,7 +78,7 @@ class AnalysisScreen(MDScreen):
             icon="arrow-left",
             theme_icon_color="Custom",
             icon_color=WHITE,
-            on_release=lambda x: self.go_back(),
+            on_release=lambda _: self.go_back(),
         )
         top_row.add_widget(back_btn)
         top_row.add_widget(MDLabel(
@@ -108,11 +109,11 @@ class AnalysisScreen(MDScreen):
             padding=[4, 0, 4, 0],
             md_bg_color=BLUE,
         )
-        prev_btn = MDIconButton(
+        self._prev_btn = MDIconButton(
             icon="chevron-left",
             theme_icon_color="Custom",
             icon_color=WHITE,
-            on_release=lambda x: self._change_week(-1),
+            on_release=lambda _: self._change_week(-1),
         )
         self.week_label = MDLabel(
             text=self._week_text(),
@@ -124,15 +125,15 @@ class AnalysisScreen(MDScreen):
             adaptive_height=True,
             pos_hint={"center_y": 0.5},
         )
-        next_btn = MDIconButton(
+        self._next_btn = MDIconButton(
             icon="chevron-right",
             theme_icon_color="Custom",
             icon_color=WHITE,
-            on_release=lambda x: self._change_week(1),
+            on_release=lambda _: self._change_week(1),
         )
-        week_row.add_widget(prev_btn)
+        week_row.add_widget(self._prev_btn)
         week_row.add_widget(self.week_label)
-        week_row.add_widget(next_btn)
+        week_row.add_widget(self._next_btn)
         root.add_widget(week_row)
 
         # --- Scrollable content ---
@@ -268,10 +269,15 @@ class AnalysisScreen(MDScreen):
     def show_loading(self, loading: bool):
         """Show or hide the loading spinner."""
         self.generate_btn.disabled = loading
+        self._prev_btn.disabled = loading
+        self._next_btn.disabled = loading
         self._loading_box.opacity = 1 if loading else 0
         if loading:
             self._empty_card.opacity = 0
             self._hide_sections()
+            self.week_label.text = "Week navigation unavailable during generation"
+        else:
+            self.week_label.text = self._week_text()
 
     @staticmethod
     def _format_section(value) -> str:
@@ -285,7 +291,7 @@ class AnalysisScreen(MDScreen):
         if isinstance(value, str):
             return value.strip() or "—"
         if isinstance(value, list):
-            return "\n".join(f"• {item}" for item in value) if value else "—"
+            return "\n".join(f"• {item}" for item in value)
         if isinstance(value, dict):
             parts = []
             for k, v in value.items():
@@ -303,6 +309,9 @@ class AnalysisScreen(MDScreen):
         self._empty_card.opacity = 0
         self._loading_box.opacity = 0
         self.generate_btn.disabled = False
+        self._prev_btn.disabled = False
+        self._next_btn.disabled = False
+        self.week_label.text = self._week_text()
         for key, _, _ in _SECTIONS:
             self._section_labels[key].text = self._format_section(data.get(key, ""))
             self._section_cards[key].opacity = 1
@@ -312,6 +321,9 @@ class AnalysisScreen(MDScreen):
         self._empty_card.opacity = 1
         self._loading_box.opacity = 0
         self.generate_btn.disabled = False
+        self._prev_btn.disabled = False
+        self._next_btn.disabled = False
+        self.week_label.text = self._week_text()
         self._hide_sections()
 
     def _hide_sections(self):
@@ -324,9 +336,13 @@ class AnalysisScreen(MDScreen):
         """Navigate back to the home screen."""
         self.manager.current = "home"
 
-    def on_enter(self, *args):
+    def on_enter(self, *_):
         """Load the latest analysis when the screen becomes active."""
+        self._active = True
         self.load_latest()
+
+    def on_leave(self, *_):
+        self._active = False
 
     def load_latest(self):
         """Load the most recent analysis from the API."""
@@ -336,33 +352,33 @@ class AnalysisScreen(MDScreen):
             try:
                 data = api_client.get_latest_analysis()
                 if data:
-                    Clock.schedule_once(lambda dt: self.show_analysis(data))
+                    Clock.schedule_once(lambda _: self._active and self.show_analysis(data))
                 else:
-                    Clock.schedule_once(lambda dt: self.show_empty_state())
+                    Clock.schedule_once(lambda _: self._active and self.show_empty_state())
             except Exception as e:
                 err = str(e)
-                Clock.schedule_once(lambda dt: self._on_load_error(err))
+                Clock.schedule_once(lambda _: self._active and self._on_error(err, "load"))
 
         threading.Thread(target=_fetch, daemon=True).start()
 
-    def _on_load_error(self, message: str):
+    def _on_error(self, message: str, context: str = "load"):
         self.show_empty_state()
         if "401" in message:
             self.analysis_text.text = (
                 "Session expired.\n\nPlease go back and log out, then log in again."
             )
         else:
-            self.analysis_text.text = f"Failed to load analysis.\n\n{message}"
+            self.analysis_text.text = f"Failed to {context} analysis.\n\n{message}"
 
-    def generate_analysis(self, *args):
+    def generate_analysis(self, *_):
         """Show confirmation dialog before requesting a new analysis."""
         if self._dialog:
             return
 
-        cancel_btn = MDButton(style="text", on_release=lambda x: self._close_dialog())
+        cancel_btn = MDButton(style="text", on_release=lambda _: self._close_dialog())
         cancel_btn.add_widget(MDButtonText(text="Cancel"))
 
-        confirm_btn = MDButton(style="text", on_release=lambda x: self._do_generate())
+        confirm_btn = MDButton(style="text", on_release=lambda _: self._do_generate())
         confirm_btn.add_widget(MDButtonText(text="Generate"))
 
         self._dialog = MDDialog(
@@ -397,19 +413,10 @@ class AnalysisScreen(MDScreen):
                 result = api_client.generate_analysis(week_start_str)
                 # Backend returns the analysis directly (201) or wrapped in
                 # {"message": ..., "analysis": {...}} (200 when already exists)
-                data = result.get("analysis", result)
-                Clock.schedule_once(lambda dt: self.show_analysis(data))
+                data = result.get("analysis") or result
+                Clock.schedule_once(lambda _: self._active and self.show_analysis(data))
             except Exception as e:
                 err = str(e)
-                Clock.schedule_once(lambda dt: self._on_generate_error(err))
+                Clock.schedule_once(lambda _: self._active and self._on_error(err, "generate"))
 
         threading.Thread(target=_fetch, daemon=True).start()
-
-    def _on_generate_error(self, message: str):
-        self.show_empty_state()
-        if "401" in message:
-            self.analysis_text.text = (
-                "Session expired.\n\nPlease go back and log out, then log in again."
-            )
-        else:
-            self.analysis_text.text = f"Failed to generate analysis.\n\n{message}"

@@ -1015,7 +1015,6 @@ class TestAnalysisScreen:
 
     def test_load_latest_shows_analysis(self, screen_manager):
         """load_latest() calls show_analysis when API returns data."""
-        from unittest.mock import patch, MagicMock
         from screens.analysis import AnalysisScreen
 
         screen = AnalysisScreen(name="analysis_ll1")
@@ -1044,7 +1043,6 @@ class TestAnalysisScreen:
 
     def test_load_latest_shows_empty_state_on_none(self, screen_manager):
         """load_latest() calls show_empty_state when API returns None."""
-        from unittest.mock import patch, MagicMock
         from screens.analysis import AnalysisScreen
 
         screen = AnalysisScreen(name="analysis_ll2")
@@ -1064,7 +1062,6 @@ class TestAnalysisScreen:
 
     def test_load_latest_shows_empty_state_on_error(self, screen_manager):
         """load_latest() shows empty state and error message on exception."""
-        from unittest.mock import patch, MagicMock
         from screens.analysis import AnalysisScreen
 
         screen = AnalysisScreen(name="analysis_ll3")
@@ -1084,7 +1081,6 @@ class TestAnalysisScreen:
 
     def test_do_generate_shows_analysis_on_success(self, screen_manager):
         """_do_generate() calls show_analysis with API data on success."""
-        from unittest.mock import patch, MagicMock
         from screens.analysis import AnalysisScreen
 
         screen = AnalysisScreen(name="analysis_gen1")
@@ -1106,7 +1102,6 @@ class TestAnalysisScreen:
 
     def test_do_generate_unwraps_existing_analysis(self, screen_manager):
         """_do_generate() unwraps {'analysis': {...}} when backend returns 200."""
-        from unittest.mock import patch, MagicMock
         from screens.analysis import AnalysisScreen
 
         screen = AnalysisScreen(name="analysis_gen2")
@@ -1129,7 +1124,6 @@ class TestAnalysisScreen:
 
     def test_do_generate_shows_error_on_failure(self, screen_manager):
         """_do_generate() shows error message on API exception."""
-        from unittest.mock import patch, MagicMock
         from screens.analysis import AnalysisScreen
 
         screen = AnalysisScreen(name="analysis_gen3")
