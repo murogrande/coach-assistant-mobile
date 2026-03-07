@@ -56,12 +56,11 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install system dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: brew install sdl2 sdl2_image sdl2_mixer sdl2_ttf pkg-config
-
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        # Only install what test_api_client.py needs — no Kivy/KivyMD required.
+        # Installing the full requirements.txt on Windows causes pip to compile
+        # Kivy from source (no pre-built wheels), which hangs the runner.
+        run: pip install requests pytest
 
       - name: Run tests
         # Screen tests require an OpenGL context (Xvfb on Linux).
