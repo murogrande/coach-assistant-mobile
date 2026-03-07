@@ -26,6 +26,15 @@ WHITE = (1, 1, 1, 1)
 WHITE_DIM = (1, 1, 1, 0.85)
 BG = (0.96, 0.96, 0.96, 1)
 
+_GENERATION_STEPS = [
+    "Reviewing your goals for the week…",
+    "Reading your journal entries…",
+    "Identifying patterns and habits…",
+    "Analysing your time and focus areas…",
+    "Generating personalised insights…",
+    "Almost done — writing recommendations…",
+]
+
 _EMPTY_STATE_TEXT = (
     "No analysis available yet.\n\n"
     "Once you have logged your goals and journal entries for the week, "
@@ -59,6 +68,8 @@ class AnalysisScreen(MDScreen):
         self._dialog = None
         self._active = False
         self._current_analysis_id = None
+        self._status_event = None
+        self._status_index = 0
         self.build_ui()
 
     def build_ui(self):
@@ -284,6 +295,24 @@ class AnalysisScreen(MDScreen):
 
     # --- Display helpers ---
 
+    def _start_status_cycle(self):
+        """Cycle through generation status messages every 5 seconds."""
+        self._status_index = 0
+        self._loading_label.text = _GENERATION_STEPS[0]
+        self._stop_status_cycle()
+
+        def _tick(dt):
+            self._status_index = (self._status_index + 1) % len(_GENERATION_STEPS)
+            self._loading_label.text = _GENERATION_STEPS[self._status_index]
+
+        self._status_event = Clock.schedule_interval(_tick, 5)
+
+    def _stop_status_cycle(self):
+        """Cancel the status message cycle."""
+        if self._status_event:
+            self._status_event.cancel()
+            self._status_event = None
+
     def show_loading(self, loading: bool):
         """Show or hide the loading spinner."""
         self.generate_btn.disabled = loading
@@ -295,7 +324,9 @@ class AnalysisScreen(MDScreen):
             self._empty_card.opacity = 0
             self._hide_sections()
             self.week_label.text = "Week navigation unavailable during generation"
+            self._loading_label.text = "Loading…"
         else:
+            self._stop_status_cycle()
             self.week_label.text = self._week_text()
 
     @staticmethod
@@ -394,6 +425,7 @@ class AnalysisScreen(MDScreen):
         threading.Thread(target=_fetch, daemon=True).start()
 
     def _on_error(self, message: str, context: str = "load"):
+        self._stop_status_cycle()
         self.show_empty_state()
         if "401" in message:
             self.analysis_text.text = (
@@ -493,6 +525,7 @@ class AnalysisScreen(MDScreen):
         """
         self._close_dialog()
         self.show_loading(True)
+        self._start_status_cycle()
         week_start_str = self._current_week_start.isoformat()
         analysis_id_to_delete = self._current_analysis_id
 
