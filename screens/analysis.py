@@ -258,7 +258,9 @@ class AnalysisScreen(MDScreen):
 
     def _week_text(self) -> str:
         end = self._current_week_start + timedelta(days=6)
-        return f"{self._current_week_start.strftime('%b %-d')} – {end.strftime('%b %-d, %Y')}"
+        s = self._current_week_start.strftime('%b %d').replace(' 0', ' ')
+        e = end.strftime('%b %d, %Y').replace(' 0', ' ')
+        return f"{s} – {e}"
 
     def _change_week(self, delta: int):
         self._current_week_start += timedelta(weeks=delta)
