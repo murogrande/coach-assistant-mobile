@@ -239,8 +239,9 @@ class AnalysisScreen(MDScreen):
         footer = MDBoxLayout(
             orientation="vertical",
             size_hint=(1, None),
-            height=80,
-            padding=[16, 12, 16, 12],
+            height=130,
+            padding=[16, 8, 16, 8],
+            spacing=8,
             md_bg_color=BG,
         )
         self.generate_btn = MDButton(
@@ -249,8 +250,21 @@ class AnalysisScreen(MDScreen):
             size_hint_x=1,
             on_release=self.generate_analysis,
         )
-        self.generate_btn.add_widget(MDButtonText(text="Generate Analysis"))
+        self._generate_btn_text = MDButtonText(text="Generate Analysis")
+        self.generate_btn.add_widget(self._generate_btn_text)
         footer.add_widget(self.generate_btn)
+
+        self.delete_btn = MDButton(
+            style="outlined",
+            theme_width="Custom",
+            size_hint_x=1,
+            on_release=self._confirm_delete,
+            opacity=0,
+            disabled=True,
+        )
+        self.delete_btn.add_widget(MDButtonText(text="Delete Analysis"))
+        footer.add_widget(self.delete_btn)
+
         root.add_widget(footer)
 
         self.add_widget(root)
@@ -273,6 +287,7 @@ class AnalysisScreen(MDScreen):
     def show_loading(self, loading: bool):
         """Show or hide the loading spinner."""
         self.generate_btn.disabled = loading
+        self.delete_btn.disabled = loading
         self._prev_btn.disabled = loading
         self._next_btn.disabled = loading
         self._loading_box.opacity = 1 if loading else 0
@@ -320,10 +335,9 @@ class AnalysisScreen(MDScreen):
         for key, _, _ in _SECTIONS:
             self._section_labels[key].text = self._format_section(data.get(key, ""))
             self._section_cards[key].opacity = 1
-        # Update button to reflect that regeneration will replace existing analysis
-        for child in self.generate_btn.children:
-            if hasattr(child, "text"):
-                child.text = "Regenerate Analysis"
+        self._generate_btn_text.text = "Regenerate Analysis"
+        self.delete_btn.opacity = 1
+        self.delete_btn.disabled = False
 
     def show_empty_state(self):
         """Show the empty state and hide sections and loading."""
@@ -335,9 +349,9 @@ class AnalysisScreen(MDScreen):
         self._next_btn.disabled = False
         self.week_label.text = self._week_text()
         self._hide_sections()
-        for child in self.generate_btn.children:
-            if hasattr(child, "text"):
-                child.text = "Generate Analysis"
+        self._generate_btn_text.text = "Generate Analysis"
+        self.delete_btn.opacity = 0
+        self.delete_btn.disabled = True
 
     def _hide_sections(self):
         for key in self._section_cards:
@@ -428,6 +442,48 @@ class AnalysisScreen(MDScreen):
         if self._dialog:
             self._dialog.dismiss()
             self._dialog = None
+
+    def _confirm_delete(self, *_):
+        """Show confirmation dialog before deleting the current analysis."""
+        if self._dialog:
+            return
+
+        cancel_btn = MDButton(style="text", on_release=lambda _: self._close_dialog())
+        cancel_btn.add_widget(MDButtonText(text="Cancel"))
+
+        confirm_btn = MDButton(style="text", on_release=lambda _: self._do_delete())
+        confirm_btn.add_widget(MDButtonText(text="Delete"))
+
+        self._dialog = MDDialog(
+            MDDialogHeadlineText(text="Delete Analysis?"),
+            MDDialogContentContainer(
+                MDLabel(
+                    text="This will permanently delete the analysis for this week.",
+                    adaptive_height=True,
+                ),
+                orientation="vertical",
+            ),
+            MDDialogButtonContainer(cancel_btn, confirm_btn),
+        )
+        self._dialog.open()
+
+    def _do_delete(self):
+        """Delete the current week's analysis."""
+        self._close_dialog()
+        analysis_id = self._current_analysis_id
+        if not analysis_id:
+            return
+        self.show_loading(True)
+
+        def _fetch():
+            try:
+                api_client.delete_analysis(analysis_id)
+                Clock.schedule_once(lambda _: self._active and self.show_empty_state())
+            except Exception as e:
+                err = str(e)
+                Clock.schedule_once(lambda _: self._active and self._on_error(err, "delete"))
+
+        threading.Thread(target=_fetch, daemon=True).start()
 
     def _do_generate(self):
         """Close the dialog and call the generate API in a background thread.
