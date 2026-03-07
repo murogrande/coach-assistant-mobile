@@ -1,0 +1,72 @@
+name: android
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      build_apk:
+        description: "Build debug APK (slow — downloads ~1 GB Android SDK/NDK)"
+        type: boolean
+        default: false
+
+jobs:
+  # ── Fast validation job (runs on every push/PR, ~3 min) ─────────────────────
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        # Only install what test_buildozer.py needs — no Kivy/KivyMD required.
+        run: pip install requests pytest
+
+      - name: Validate buildozer.spec
+        run: python -m pytest tests/test_buildozer.py -v
+
+  # ── Full APK build (manual dispatch only, ~30–60 min) ───────────────────────
+  build-apk:
+    if: github.event.inputs.build_apk == 'true'
+    needs: validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git python3-dev \
+            libffi-dev libssl-dev \
+            libjpeg-dev libpng-dev zlib1g-dev \
+            pkg-config autoconf automake libtool \
+            openjdk-17-jdk unzip
+
+      - name: Install buildozer + cython
+        run: pip install buildozer cython
+
+      - name: Build debug APK
+        # REMINDER: API_BASE_URL in services/api_client.py must point to your
+        # backend's local IP before building for a physical device.
+        run: buildozer -v android debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: bin/*.apk
+          retention-days: 7
