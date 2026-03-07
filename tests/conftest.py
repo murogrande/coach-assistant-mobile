@@ -9,8 +9,7 @@ os.environ["KIVY_NO_CONSOLELOG"] = "1"
 
 # Configure headless mode for CI
 if not os.environ.get("DISPLAY"):
-    os.environ["KIVY_WINDOW"] = "sdl2"
-    os.environ["SDL_VIDEODRIVER"] = "dummy"
+    os.environ["KIVY_WINDOW"] = "headless"
     os.environ["SDL_AUDIODRIVER"] = "dummy"
 
 from kivy.config import Config
