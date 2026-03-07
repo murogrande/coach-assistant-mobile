@@ -125,7 +125,7 @@ BG = (0.96, 0.96, 0.96, 1)
 | #7 | Implement Daily Journal Screen UI | ✅ Done |
 | #8 | Implement Journal API Integration | ✅ Done |
 | #9 | Implement Weekly Analysis Screen UI | ✅ Done |
-| #10 | Implement Analysis API Integration | 🔲 Pending |
+| #10 | Implement Analysis API Integration | ✅ Done |
 | #15 | Setup Buildozer for Android Build | 🔲 Pending |
 | #16 | Test on Android Device | 🔲 Pending |
 | #21 | Multi-Provider Support in API Client | 🔲 Pending |
@@ -135,7 +135,7 @@ BG = (0.96, 0.96, 0.96, 1)
 **Milestone "POC Ready"** = Issues #1–10, then #15–16 to get on phone.
 **Milestone "Multi-Provider"** = Issues #21–23 (mobile) + #39–42 (backend). Requires backend work first.
 
-### Analysis screen (Issue #9) — what's implemented
+### Analysis screen (Issues #9 + #10) — what's implemented
 
 - Blue header + week selector strip (`<` week range `>`)
 - 6 section cards (hidden until data loads): Summary, Goal Achievements, Improvement Suggestions, Time Analysis, Habits Analysis, Blind Spots
@@ -143,6 +143,13 @@ BG = (0.96, 0.96, 0.96, 1)
 - Empty state card with placeholder text
 - Display helpers: `show_analysis(data)`, `show_loading(bool)`, `show_empty_state()`
 - `analysis_text` attribute preserved for test compatibility
+- `on_enter` calls `load_latest()` automatically; `on_leave` clears `_active` flag
+- `_active` flag guards all `Clock.schedule_once` callbacks — UI skipped if user navigated away
+- Week nav buttons (`_prev_btn`, `_next_btn`) disabled during generation; week label replaced with "Week navigation unavailable during generation"
+- `generate_analysis()` shows confirmation dialog before calling API
+- `_do_generate()` unwraps `{"analysis": {...}}` wrapper (200) or uses response directly (201)
+- `_on_error(message, context)` handles load/generate errors with 401 detection
+- `_format_section(value)` handles str, list, dict-of-lists for display
 
 ## Authentication (Issue #3)
 
