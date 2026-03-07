@@ -7,9 +7,14 @@ import pytest
 os.environ["KIVY_NO_ARGS"] = "1"
 os.environ["KIVY_NO_CONSOLELOG"] = "1"
 
-# Configure headless mode for CI (Linux sets DISPLAY via Xvfb; Windows/macOS don't)
+# Configure headless mode for CI (Linux sets DISPLAY via Xvfb; Windows/macOS don't).
+# KIVY_DPI bypasses EventLoop.ensure_window() inside get_dpi(), which is called
+# at import time by kivymd.font_definitions.  SDL2 dummy/offscreen drivers can't
+# provide an OpenGL context, so we skip window creation entirely and supply a
+# fixed DPI.  Widget/canvas tests still need a real display and run Linux-only.
 if not os.environ.get("DISPLAY"):
-    os.environ["SDL_VIDEODRIVER"] = "dummy"
+    os.environ["KIVY_DPI"] = "96"
+    os.environ["KIVY_METRICS_DENSITY"] = "1"
     os.environ["SDL_AUDIODRIVER"] = "dummy"
 
 from kivy.config import Config
