@@ -105,10 +105,12 @@ jobs:
   # First run: ~60 min (populates cache).
   # Subsequent runs: ~5–10 min (SDK/NDK + compiled ARM packages restored from cache).
   # Only runs on push to master or manually via workflow_dispatch.
+  # ubuntu-22.04 is required — ubuntu-24.04 (ubuntu-latest) ships autoconf/libtool
+  # versions that break p4a's libffi configure scripts.
   build-apk:
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/mm/issue15' || github.event.inputs.build_apk == 'true'
     needs: android-env
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v4
