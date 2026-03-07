@@ -158,6 +158,32 @@ class AnalysisScreen(MDScreen):
             md_bg_color=BG,
         )
 
+        # Loading state — added first so it appears at the top when visible.
+        # (Section cards below it have opacity=0 but still occupy height,
+        # so if loading_box were added last it would be pushed off-screen.)
+        self._loading_box = MDBoxLayout(
+            orientation="vertical",
+            adaptive_height=True,
+            padding=[16, 40, 16, 40],
+            spacing=16,
+            opacity=0,
+        )
+        self._spinner = MDCircularProgressIndicator(
+            size_hint=(None, None),
+            size=(48, 48),
+            pos_hint={"center_x": 0.5},
+        )
+        self._loading_label = MDLabel(
+            text="Loading…",
+            font_style="Body",
+            role="large",
+            halign="center",
+            adaptive_height=True,
+        )
+        self._loading_box.add_widget(self._spinner)
+        self._loading_box.add_widget(self._loading_label)
+        scroll_inner.add_widget(self._loading_box)
+
         # Empty state card
         self._empty_card = MDCard(
             orientation="vertical",
@@ -218,30 +244,6 @@ class AnalysisScreen(MDScreen):
             self._section_cards[key] = card
             self._section_labels[key] = value_lbl
             scroll_inner.add_widget(card)
-
-        # Loading state
-        self._loading_box = MDBoxLayout(
-            orientation="vertical",
-            adaptive_height=True,
-            padding=[16, 40, 16, 40],
-            spacing=16,
-            opacity=0,
-        )
-        self._spinner = MDCircularProgressIndicator(
-            size_hint=(None, None),
-            size=(48, 48),
-            pos_hint={"center_x": 0.5},
-        )
-        self._loading_label = MDLabel(
-            text="Generating analysis…\nThis may take 10–30 seconds.",
-            font_style="Body",
-            role="large",
-            halign="center",
-            adaptive_height=True,
-        )
-        self._loading_box.add_widget(self._spinner)
-        self._loading_box.add_widget(self._loading_label)
-        scroll_inner.add_widget(self._loading_box)
 
         scroll.add_widget(scroll_inner)
         root.add_widget(scroll)
