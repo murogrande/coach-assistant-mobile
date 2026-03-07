@@ -9,8 +9,11 @@ os.environ["KIVY_NO_CONSOLELOG"] = "1"
 
 # Configure headless mode for CI
 if not os.environ.get("DISPLAY"):
-    os.environ["KIVY_WINDOW"] = "headless"
     os.environ["SDL_AUDIODRIVER"] = "dummy"
+    # get_dpi() calls EventLoop.ensure_window() which aborts on platforms
+    # without a display (Windows/macOS CI). Patch it to return a fixed DPI.
+    from kivy.metrics import MetricsBase
+    MetricsBase.get_dpi = lambda self, force_recompute=False: 96.0
 
 from kivy.config import Config
 Config.set("graphics", "width", "400")
