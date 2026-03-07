@@ -106,7 +106,7 @@ jobs:
   # Subsequent runs: ~5–10 min (SDK/NDK + compiled ARM packages restored from cache).
   # Only runs on push to master or manually via workflow_dispatch.
   build-apk:
-    if: github.ref == 'refs/heads/master' || github.event.inputs.build_apk == 'true'
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/mm/issue15' || github.event.inputs.build_apk == 'true'
     needs: android-env
     runs-on: ubuntu-latest
 
