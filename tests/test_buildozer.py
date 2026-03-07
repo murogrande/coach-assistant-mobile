@@ -8,6 +8,7 @@ These run in CI on every push to catch misconfigurations before a real build
 import configparser
 import os
 import re
+import warnings
 
 SPEC_PATH = os.path.join(os.path.dirname(__file__), "..", "buildozer.spec")
 API_CLIENT_PATH = os.path.join(os.path.dirname(__file__), "..", "services", "api_client.py")
@@ -210,7 +211,6 @@ class TestAPIClientAndroidCompat:
         # It's fine for localhost during desktop dev, but flag it as a reminder
         # in a dedicated test so the developer sees it at build time.
         if "localhost" in url or "127.0.0.1" in url:
-            import warnings
             warnings.warn(
                 f"API_BASE_URL is set to '{url}'. "
                 "Change it to your laptop's local IP before building for a physical device.",

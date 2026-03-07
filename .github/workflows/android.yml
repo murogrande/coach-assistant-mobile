@@ -108,7 +108,7 @@ jobs:
   # ubuntu-22.04 is required — ubuntu-24.04 (ubuntu-latest) ships autoconf/libtool
   # versions that break p4a's libffi configure scripts.
   build-apk:
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/mm/issue15' || github.event.inputs.build_apk == 'true'
+    if: github.ref == 'refs/heads/master' || github.event.inputs.build_apk == 'true'
     needs: android-env
     runs-on: ubuntu-22.04
 
@@ -126,13 +126,16 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # Cache the .buildozer directory — contains Android SDK/NDK (~1 GB) and
-      # all compiled ARM packages.  Key includes the spec hash so the cache is
-      # invalidated automatically when requirements or Android settings change.
+      # Two directories need caching:
+      #   .buildozer/  — project-level build artefacts (bootstrap, compiled app)
+      #   ~/.buildozer/ — global packages: Android SDK, NDK, ARM-compiled libs
+      # Without caching ~/.buildozer the SDK/NDK are re-downloaded every run.
       - name: Cache .buildozer
         uses: actions/cache@v4
         with:
-          path: .buildozer
+          path: |
+            .buildozer
+            ~/.buildozer
           key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
             buildozer-${{ runner.os }}-
