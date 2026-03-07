@@ -1013,14 +1013,17 @@ class TestAnalysisScreen:
         assert hasattr(screen, "analysis_text")
         assert screen.analysis_text is not None
 
-    def test_load_latest_shows_analysis(self, screen_manager):
-        """load_latest() calls show_analysis when API returns data."""
+    def test_load_for_week_shows_analysis(self, screen_manager):
+        """load_for_week() calls show_analysis when a matching entry is found."""
         from screens.analysis import AnalysisScreen
 
         screen = AnalysisScreen(name="analysis_ll1")
         screen_manager.add_widget(screen)
 
+        week_str = screen._current_week_start.isoformat()
         sample_data = {
+            "id": 42,
+            "week_start_date": week_str,
             "summary": "Good week",
             "achievements": {"goal1": "done"},
             "improvements": "Sleep earlier",
@@ -1029,52 +1032,52 @@ class TestAnalysisScreen:
             "blind_spots": "None",
         }
 
-        with patch("screens.analysis.api_client.get_latest_analysis", return_value=sample_data):
+        with patch("screens.analysis.api_client.get_analysis_list", return_value=[sample_data]):
             with patch("screens.analysis.threading.Thread") as mock_thread:
                 mock_thread.return_value = MagicMock()
-                screen.load_latest()
+                screen.load_for_week()
                 target = mock_thread.call_args[1]["target"]
 
         with patch.object(screen, "show_analysis") as mock_show:
             with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
-                with patch("screens.analysis.api_client.get_latest_analysis", return_value=sample_data):
+                with patch("screens.analysis.api_client.get_analysis_list", return_value=[sample_data]):
                     target()
                 mock_show.assert_called_once_with(sample_data)
 
-    def test_load_latest_shows_empty_state_on_none(self, screen_manager):
-        """load_latest() calls show_empty_state when API returns None."""
+    def test_load_for_week_shows_empty_state_on_no_match(self, screen_manager):
+        """load_for_week() calls show_empty_state when no entry matches the week."""
         from screens.analysis import AnalysisScreen
 
         screen = AnalysisScreen(name="analysis_ll2")
         screen_manager.add_widget(screen)
 
-        with patch("screens.analysis.api_client.get_latest_analysis", return_value=None):
+        with patch("screens.analysis.api_client.get_analysis_list", return_value=[]):
             with patch("screens.analysis.threading.Thread") as mock_thread:
                 mock_thread.return_value = MagicMock()
-                screen.load_latest()
+                screen.load_for_week()
                 target = mock_thread.call_args[1]["target"]
 
         with patch.object(screen, "show_empty_state") as mock_empty:
             with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
-                with patch("screens.analysis.api_client.get_latest_analysis", return_value=None):
+                with patch("screens.analysis.api_client.get_analysis_list", return_value=[]):
                     target()
                 mock_empty.assert_called_once()
 
-    def test_load_latest_shows_empty_state_on_error(self, screen_manager):
-        """load_latest() shows empty state and error message on exception."""
+    def test_load_for_week_shows_empty_state_on_error(self, screen_manager):
+        """load_for_week() shows empty state and error message on exception."""
         from screens.analysis import AnalysisScreen
 
         screen = AnalysisScreen(name="analysis_ll3")
         screen_manager.add_widget(screen)
 
-        with patch("screens.analysis.api_client.get_latest_analysis", side_effect=Exception("timeout")):
+        with patch("screens.analysis.api_client.get_analysis_list", side_effect=Exception("timeout")):
             with patch("screens.analysis.threading.Thread") as mock_thread:
                 mock_thread.return_value = MagicMock()
-                screen.load_latest()
+                screen.load_for_week()
                 target = mock_thread.call_args[1]["target"]
 
         with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
-            with patch("screens.analysis.api_client.get_latest_analysis", side_effect=Exception("timeout")):
+            with patch("screens.analysis.api_client.get_analysis_list", side_effect=Exception("timeout")):
                 target()
 
         assert "Failed to load" in screen.analysis_text.text

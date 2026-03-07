@@ -58,6 +58,7 @@ class AnalysisScreen(MDScreen):
         self._section_labels = {}
         self._dialog = None
         self._active = False
+        self._current_analysis_id = None
         self.build_ui()
 
     def build_ui(self):
@@ -265,6 +266,7 @@ class AnalysisScreen(MDScreen):
     def _change_week(self, delta: int):
         self._current_week_start += timedelta(weeks=delta)
         self.week_label.text = self._week_text()
+        self.load_for_week()
 
     # --- Display helpers ---
 
@@ -308,6 +310,7 @@ class AnalysisScreen(MDScreen):
 
     def show_analysis(self, data: dict):
         """Populate and reveal all analysis section cards."""
+        self._current_analysis_id = data.get("id")
         self._empty_card.opacity = 0
         self._loading_box.opacity = 0
         self.generate_btn.disabled = False
@@ -317,9 +320,14 @@ class AnalysisScreen(MDScreen):
         for key, _, _ in _SECTIONS:
             self._section_labels[key].text = self._format_section(data.get(key, ""))
             self._section_cards[key].opacity = 1
+        # Update button to reflect that regeneration will replace existing analysis
+        for child in self.generate_btn.children:
+            if hasattr(child, "text"):
+                child.text = "Regenerate Analysis"
 
     def show_empty_state(self):
         """Show the empty state and hide sections and loading."""
+        self._current_analysis_id = None
         self._empty_card.opacity = 1
         self._loading_box.opacity = 0
         self.generate_btn.disabled = False
@@ -327,6 +335,9 @@ class AnalysisScreen(MDScreen):
         self._next_btn.disabled = False
         self.week_label.text = self._week_text()
         self._hide_sections()
+        for child in self.generate_btn.children:
+            if hasattr(child, "text"):
+                child.text = "Generate Analysis"
 
     def _hide_sections(self):
         for key in self._section_cards:
@@ -339,22 +350,27 @@ class AnalysisScreen(MDScreen):
         self.manager.current = "home"
 
     def on_enter(self, *_):
-        """Load the latest analysis when the screen becomes active."""
+        """Load the analysis for the current week when the screen becomes active."""
         self._active = True
-        self.load_latest()
+        self.load_for_week()
 
     def on_leave(self, *_):
         self._active = False
 
-    def load_latest(self):
-        """Load the most recent analysis from the API."""
+    def load_for_week(self):
+        """Load the analysis for the currently selected week."""
         self.show_loading(True)
+        week_start_str = self._current_week_start.isoformat()
 
         def _fetch():
             try:
-                data = api_client.get_latest_analysis()
-                if data:
-                    Clock.schedule_once(lambda _: self._active and self.show_analysis(data))
+                entries = api_client.get_analysis_list()
+                match = next(
+                    (e for e in entries if e.get("week_start_date") == week_start_str),
+                    None,
+                )
+                if match:
+                    Clock.schedule_once(lambda _: self._active and self.show_analysis(match))
                 else:
                     Clock.schedule_once(lambda _: self._active and self.show_empty_state())
             except Exception as e:
@@ -377,22 +393,31 @@ class AnalysisScreen(MDScreen):
         if self._dialog:
             return
 
+        if self._current_analysis_id:
+            headline = "Regenerate Analysis?"
+            body = (
+                "This will delete the existing analysis for this week and generate "
+                "a new one using AI. It may take 10–30 seconds and incurs a small cost."
+            )
+            confirm_label = "Regenerate"
+        else:
+            headline = "Generate Analysis?"
+            body = (
+                "This will call an AI API to analyse your week's goals and "
+                "journal entries. It may take 10–30 seconds and incurs a small cost."
+            )
+            confirm_label = "Generate"
+
         cancel_btn = MDButton(style="text", on_release=lambda _: self._close_dialog())
         cancel_btn.add_widget(MDButtonText(text="Cancel"))
 
         confirm_btn = MDButton(style="text", on_release=lambda _: self._do_generate())
-        confirm_btn.add_widget(MDButtonText(text="Generate"))
+        confirm_btn.add_widget(MDButtonText(text=confirm_label))
 
         self._dialog = MDDialog(
-            MDDialogHeadlineText(text="Generate Analysis?"),
+            MDDialogHeadlineText(text=headline),
             MDDialogContentContainer(
-                MDLabel(
-                    text=(
-                        "This will call an AI API to analyse your week's goals and "
-                        "journal entries. It may take 10–30 seconds and incurs a small cost."
-                    ),
-                    adaptive_height=True,
-                ),
+                MDLabel(text=body, adaptive_height=True),
                 orientation="vertical",
             ),
             MDDialogButtonContainer(cancel_btn, confirm_btn),
@@ -405,16 +430,21 @@ class AnalysisScreen(MDScreen):
             self._dialog = None
 
     def _do_generate(self):
-        """Close the dialog and call the generate API in a background thread."""
+        """Close the dialog and call the generate API in a background thread.
+
+        If an analysis already exists for this week, delete it first so the
+        backend will create a fresh one instead of returning the cached result.
+        """
         self._close_dialog()
         self.show_loading(True)
         week_start_str = self._current_week_start.isoformat()
+        analysis_id_to_delete = self._current_analysis_id
 
         def _fetch():
             try:
+                if analysis_id_to_delete:
+                    api_client.delete_analysis(analysis_id_to_delete)
                 result = api_client.generate_analysis(week_start_str)
-                # Backend returns the analysis directly (201) or wrapped in
-                # {"message": ..., "analysis": {...}} (200 when already exists)
                 data = result.get("analysis") or result
                 Clock.schedule_once(lambda _: self._active and self.show_analysis(data))
             except Exception as e:

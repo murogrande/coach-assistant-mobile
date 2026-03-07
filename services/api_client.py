@@ -217,6 +217,21 @@ class APIClient:
         response.raise_for_status()
         return response.json()
 
+    def get_analysis_list(self) -> List[Dict]:
+        """Get all weekly analyses for the current user"""
+        url = f"{self.API_BASE_URL}/analysis/"
+        response = requests.get(url, headers=self.headers)
+        if response.status_code == 404:
+            return []
+        response.raise_for_status()
+        return response.json()
+
+    def delete_analysis(self, analysis_id: int) -> None:
+        """Delete an analysis by ID"""
+        url = f"{self.API_BASE_URL}/analysis/{analysis_id}/"
+        response = requests.delete(url, headers=self.headers)
+        response.raise_for_status()
+
 
 # Singleton instance
 api_client = APIClient()
