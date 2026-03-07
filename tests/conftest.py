@@ -44,8 +44,17 @@ class TestApp:
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_app():
-    """Initialize MDApp for testing"""
-    TestApp.get_app()
+    """Initialize MDApp for testing.
+
+    On Linux CI (Xvfb) this succeeds fully.  On Windows/macOS CI there is no
+    display so KivyMD's ThemeManager cannot access Window — we catch that and
+    let the session continue.  The compat job only runs test_api_client.py
+    which has no dependency on MDApp.
+    """
+    try:
+        TestApp.get_app()
+    except Exception:
+        pass
 
 
 @pytest.fixture
