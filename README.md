@@ -103,9 +103,9 @@ python -m pytest tests/end_to_end.py -v     # end-to-end flows only
 - ✅ **Issue #7** — Journal screen UI: text area, date navigation (prev/next), load existing entries, discard confirmation dialog
 - ✅ **Issue #8** — Journal API integration: load entry by date, save (create/update), loading feedback, entry id tracking
 - ✅ **Issue #9** — Analysis screen UI: week selector, 6 section cards (Summary, Achievements, Improvements, Time, Habits, Blind Spots), loading spinner, empty state, display helpers
+- ✅ **Issue #10** — Analysis API integration: load latest on enter, generate with confirmation dialog, threaded API calls, section formatting (str/list/dict), stale-navigation guard (`_active` flag), week nav locked during generation
 
 ### Next
-- 🔲 **Issue #10** — Analysis API integration (wire up `generate_analysis` + `get_latest_analysis`)
 - 🔲 **Issue #15–16** — Buildozer Android build + device testing
 - 🔲 **Issue #21–23** — Multi-provider analysis (OpenAI / Claude / Local Qwen3) — requires backend #39–42 first
 

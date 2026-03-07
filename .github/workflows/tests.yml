@@ -40,3 +40,29 @@ jobs:
         env:
           DISPLAY: ":99"
         run: python -m pytest tests/ -q
+
+  compat:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Python dependencies
+        # Only install what test_api_client.py needs — no Kivy/KivyMD required.
+        # Installing the full requirements.txt on Windows causes pip to compile
+        # Kivy from source (no pre-built wheels), which hangs the runner.
+        run: pip install requests pytest
+
+      - name: Run tests
+        # Screen tests require an OpenGL context (Xvfb on Linux).
+        # Only run API-client tests here — they have no GUI dependency.
+        run: python -m pytest tests/test_api_client.py -q
