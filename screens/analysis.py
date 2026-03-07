@@ -1,14 +1,24 @@
 """Analysis Screen"""
 
+import threading
 from datetime import date, timedelta
 
+from kivy.clock import Clock
 from kivymd.uix.card import MDCard
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.button import MDButton, MDButtonText, MDIconButton
+from kivymd.uix.dialog import (
+    MDDialog,
+    MDDialogHeadlineText,
+    MDDialogContentContainer,
+    MDDialogButtonContainer,
+)
 from kivymd.uix.label import MDLabel
 from kivymd.uix.progressindicator import MDCircularProgressIndicator
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.scrollview import MDScrollView
+
+from services.api_client import api_client
 
 
 BLUE = (0.129, 0.588, 0.953, 1)
@@ -46,6 +56,7 @@ class AnalysisScreen(MDScreen):
         self._current_week_start = _monday_of(date.today())
         self._section_cards = {}
         self._section_labels = {}
+        self._dialog = None
         self.build_ui()
 
     def build_ui(self):
@@ -262,18 +273,38 @@ class AnalysisScreen(MDScreen):
             self._empty_card.opacity = 0
             self._hide_sections()
 
+    @staticmethod
+    def _format_section(value) -> str:
+        """Format an analysis field value for display.
+
+        Handles str, list, and nested dict-of-lists structures returned by the AI.
+        Example for achievements: {"completed_goals": [...], "key_wins": [...]}
+        """
+        if not value:
+            return "—"
+        if isinstance(value, str):
+            return value.strip() or "—"
+        if isinstance(value, list):
+            return "\n".join(f"• {item}" for item in value) if value else "—"
+        if isinstance(value, dict):
+            parts = []
+            for k, v in value.items():
+                title = k.replace("_", " ").title()
+                if isinstance(v, list):
+                    parts.append(title + ":")
+                    parts.extend(f"  • {item}" for item in v)
+                else:
+                    parts.append(f"{title}: {v}")
+            return "\n".join(parts) if parts else "—"
+        return str(value).strip() or "—"
+
     def show_analysis(self, data: dict):
         """Populate and reveal all analysis section cards."""
         self._empty_card.opacity = 0
         self._loading_box.opacity = 0
         self.generate_btn.disabled = False
         for key, _, _ in _SECTIONS:
-            value = data.get(key, "")
-            if isinstance(value, dict):
-                text = "\n".join(f"• {k}: {v}" for k, v in value.items()) if value else "—"
-            else:
-                text = str(value).strip() if value else "—"
-            self._section_labels[key].text = text
+            self._section_labels[key].text = self._format_section(data.get(key, ""))
             self._section_cards[key].opacity = 1
 
     def show_empty_state(self):
@@ -287,18 +318,98 @@ class AnalysisScreen(MDScreen):
         for key in self._section_cards:
             self._section_cards[key].opacity = 0
 
-    # --- Navigation & API stubs ---
+    # --- Navigation & API ---
 
     def go_back(self):
         """Navigate back to the home screen."""
         self.manager.current = "home"
 
-    def generate_analysis(self, *args):
-        """Request a new weekly analysis from the API (Issue #10)."""
-        # TODO: Call api_client.generate_analysis() (Issue #10)
-        pass
+    def on_enter(self, *args):
+        """Load the latest analysis when the screen becomes active."""
+        self.load_latest()
 
     def load_latest(self):
-        """Load the most recent analysis from the API (Issue #10)."""
-        # TODO: Call api_client.get_latest_analysis() (Issue #10)
-        pass
+        """Load the most recent analysis from the API."""
+        self.show_loading(True)
+
+        def _fetch():
+            try:
+                data = api_client.get_latest_analysis()
+                if data:
+                    Clock.schedule_once(lambda dt: self.show_analysis(data))
+                else:
+                    Clock.schedule_once(lambda dt: self.show_empty_state())
+            except Exception as e:
+                err = str(e)
+                Clock.schedule_once(lambda dt: self._on_load_error(err))
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _on_load_error(self, message: str):
+        self.show_empty_state()
+        if "401" in message:
+            self.analysis_text.text = (
+                "Session expired.\n\nPlease go back and log out, then log in again."
+            )
+        else:
+            self.analysis_text.text = f"Failed to load analysis.\n\n{message}"
+
+    def generate_analysis(self, *args):
+        """Show confirmation dialog before requesting a new analysis."""
+        if self._dialog:
+            return
+
+        cancel_btn = MDButton(style="text", on_release=lambda x: self._close_dialog())
+        cancel_btn.add_widget(MDButtonText(text="Cancel"))
+
+        confirm_btn = MDButton(style="text", on_release=lambda x: self._do_generate())
+        confirm_btn.add_widget(MDButtonText(text="Generate"))
+
+        self._dialog = MDDialog(
+            MDDialogHeadlineText(text="Generate Analysis?"),
+            MDDialogContentContainer(
+                MDLabel(
+                    text=(
+                        "This will call an AI API to analyse your week's goals and "
+                        "journal entries. It may take 10–30 seconds and incurs a small cost."
+                    ),
+                    adaptive_height=True,
+                ),
+                orientation="vertical",
+            ),
+            MDDialogButtonContainer(cancel_btn, confirm_btn),
+        )
+        self._dialog.open()
+
+    def _close_dialog(self):
+        if self._dialog:
+            self._dialog.dismiss()
+            self._dialog = None
+
+    def _do_generate(self):
+        """Close the dialog and call the generate API in a background thread."""
+        self._close_dialog()
+        self.show_loading(True)
+        week_start_str = self._current_week_start.isoformat()
+
+        def _fetch():
+            try:
+                result = api_client.generate_analysis(week_start_str)
+                # Backend returns the analysis directly (201) or wrapped in
+                # {"message": ..., "analysis": {...}} (200 when already exists)
+                data = result.get("analysis", result)
+                Clock.schedule_once(lambda dt: self.show_analysis(data))
+            except Exception as e:
+                err = str(e)
+                Clock.schedule_once(lambda dt: self._on_generate_error(err))
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _on_generate_error(self, message: str):
+        self.show_empty_state()
+        if "401" in message:
+            self.analysis_text.text = (
+                "Session expired.\n\nPlease go back and log out, then log in again."
+            )
+        else:
+            self.analysis_text.text = f"Failed to generate analysis.\n\n{message}"

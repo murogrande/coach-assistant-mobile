@@ -1012,3 +1012,137 @@ class TestAnalysisScreen:
 
         assert hasattr(screen, "analysis_text")
         assert screen.analysis_text is not None
+
+    def test_load_latest_shows_analysis(self, screen_manager):
+        """load_latest() calls show_analysis when API returns data."""
+        from unittest.mock import patch, MagicMock
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_ll1")
+        screen_manager.add_widget(screen)
+
+        sample_data = {
+            "summary": "Good week",
+            "achievements": {"goal1": "done"},
+            "improvements": "Sleep earlier",
+            "time_analysis": {},
+            "habits_analysis": {},
+            "blind_spots": "None",
+        }
+
+        with patch("screens.analysis.api_client.get_latest_analysis", return_value=sample_data):
+            with patch("screens.analysis.threading.Thread") as mock_thread:
+                mock_thread.return_value = MagicMock()
+                screen.load_latest()
+                target = mock_thread.call_args[1]["target"]
+
+        with patch.object(screen, "show_analysis") as mock_show:
+            with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
+                with patch("screens.analysis.api_client.get_latest_analysis", return_value=sample_data):
+                    target()
+                mock_show.assert_called_once_with(sample_data)
+
+    def test_load_latest_shows_empty_state_on_none(self, screen_manager):
+        """load_latest() calls show_empty_state when API returns None."""
+        from unittest.mock import patch, MagicMock
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_ll2")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.analysis.api_client.get_latest_analysis", return_value=None):
+            with patch("screens.analysis.threading.Thread") as mock_thread:
+                mock_thread.return_value = MagicMock()
+                screen.load_latest()
+                target = mock_thread.call_args[1]["target"]
+
+        with patch.object(screen, "show_empty_state") as mock_empty:
+            with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
+                with patch("screens.analysis.api_client.get_latest_analysis", return_value=None):
+                    target()
+                mock_empty.assert_called_once()
+
+    def test_load_latest_shows_empty_state_on_error(self, screen_manager):
+        """load_latest() shows empty state and error message on exception."""
+        from unittest.mock import patch, MagicMock
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_ll3")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.analysis.api_client.get_latest_analysis", side_effect=Exception("timeout")):
+            with patch("screens.analysis.threading.Thread") as mock_thread:
+                mock_thread.return_value = MagicMock()
+                screen.load_latest()
+                target = mock_thread.call_args[1]["target"]
+
+        with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
+            with patch("screens.analysis.api_client.get_latest_analysis", side_effect=Exception("timeout")):
+                target()
+
+        assert "Failed to load" in screen.analysis_text.text
+
+    def test_do_generate_shows_analysis_on_success(self, screen_manager):
+        """_do_generate() calls show_analysis with API data on success."""
+        from unittest.mock import patch, MagicMock
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_gen1")
+        screen_manager.add_widget(screen)
+
+        api_response = {"summary": "Great", "achievements": {}, "improvements": "", "time_analysis": {}, "habits_analysis": {}, "blind_spots": ""}
+
+        with patch("screens.analysis.api_client.generate_analysis", return_value=api_response):
+            with patch("screens.analysis.threading.Thread") as mock_thread:
+                mock_thread.return_value = MagicMock()
+                screen._do_generate()
+                target = mock_thread.call_args[1]["target"]
+
+        with patch.object(screen, "show_analysis") as mock_show:
+            with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
+                with patch("screens.analysis.api_client.generate_analysis", return_value=api_response):
+                    target()
+                mock_show.assert_called_once_with(api_response)
+
+    def test_do_generate_unwraps_existing_analysis(self, screen_manager):
+        """_do_generate() unwraps {'analysis': {...}} when backend returns 200."""
+        from unittest.mock import patch, MagicMock
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_gen2")
+        screen_manager.add_widget(screen)
+
+        inner = {"summary": "Existing", "achievements": {}, "improvements": "", "time_analysis": {}, "habits_analysis": {}, "blind_spots": ""}
+        wrapped = {"message": "Analysis already exists for this week. Returning existing analysis.", "analysis": inner}
+
+        with patch("screens.analysis.api_client.generate_analysis", return_value=wrapped):
+            with patch("screens.analysis.threading.Thread") as mock_thread:
+                mock_thread.return_value = MagicMock()
+                screen._do_generate()
+                target = mock_thread.call_args[1]["target"]
+
+        with patch.object(screen, "show_analysis") as mock_show:
+            with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
+                with patch("screens.analysis.api_client.generate_analysis", return_value=wrapped):
+                    target()
+                mock_show.assert_called_once_with(inner)
+
+    def test_do_generate_shows_error_on_failure(self, screen_manager):
+        """_do_generate() shows error message on API exception."""
+        from unittest.mock import patch, MagicMock
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_gen3")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.analysis.api_client.generate_analysis", side_effect=Exception("API error")):
+            with patch("screens.analysis.threading.Thread") as mock_thread:
+                mock_thread.return_value = MagicMock()
+                screen._do_generate()
+                target = mock_thread.call_args[1]["target"]
+
+        with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
+            with patch("screens.analysis.api_client.generate_analysis", side_effect=Exception("API error")):
+                target()
+
+        assert "Failed to generate" in screen.analysis_text.text
