@@ -8,12 +8,12 @@ on:
   workflow_dispatch:
     inputs:
       build_apk:
-        description: "Build debug APK (slow — downloads ~1 GB Android SDK/NDK)"
+        description: "Build debug APK"
         type: boolean
         default: false
 
 jobs:
-  # ── Fast validation job (runs on every push/PR, ~3 min) ─────────────────────
+  # ── 1. Spec content validation (~3 min, no Android toolchain needed) ─────────
   validate:
     runs-on: ubuntu-latest
 
@@ -26,16 +26,88 @@ jobs:
           python-version: "3.10"
 
       - name: Install dependencies
-        # Only install what test_buildozer.py needs — no Kivy/KivyMD required.
         run: pip install requests pytest
 
       - name: Validate buildozer.spec
         run: python -m pytest tests/test_buildozer.py -v
 
-  # ── Full APK build (manual dispatch only, ~30–60 min) ───────────────────────
-  build-apk:
-    if: github.event.inputs.build_apk == 'true'
+  # ── 2. Android build-environment check (~2 min, no APK compiled) ─────────────
+  # Installs the real Android toolchain (Java + buildozer) and validates the spec
+  # using buildozer's own parser.  Catches issues (bad requirement formats, unknown
+  # keys, missing mandatory fields) that our configparser tests cannot see.
+  # Runs on every push/PR — no SDK/NDK downloaded, so it stays fast.
+  android-env:
+    runs-on: ubuntu-latest
     needs: validate
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Java (required by buildozer even for spec parsing)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install buildozer
+        run: pip install buildozer
+
+      - name: Check build tool versions
+        run: |
+          echo "=== Java ===" && java -version
+          echo "=== Python ===" && python --version
+          echo "=== buildozer ===" && buildozer version
+
+      - name: Validate spec with buildozer's own parser
+        run: |
+          python - <<'EOF'
+          import sys, os
+          os.chdir(os.environ.get("GITHUB_WORKSPACE", "."))
+
+          from buildozer import Buildozer
+
+          b = Buildozer()
+
+          required_keys = [
+              ("app", "title"),
+              ("app", "package.name"),
+              ("app", "package.domain"),
+              ("app", "version"),
+              ("app", "requirements"),
+              ("app", "android.permissions"),
+              ("app", "android.api"),
+              ("app", "android.minapi"),
+          ]
+
+          errors = []
+          for section, key in required_keys:
+              try:
+                  val = b.config.get(section, key)
+                  print(f"  [ok] {section}.{key} = {val}")
+              except Exception as e:
+                  errors.append(f"  [MISSING] {section}.{key}: {e}")
+
+          if errors:
+              print("\nErrors found in buildozer.spec:")
+              for err in errors:
+                  print(err)
+              sys.exit(1)
+
+          print("\nbuildozer.spec parsed successfully.")
+          EOF
+
+  # ── 3. Full APK build ────────────────────────────────────────────────────────
+  # First run: ~60 min (populates cache).
+  # Subsequent runs: ~5–10 min (SDK/NDK + compiled ARM packages restored from cache).
+  # Only runs on push to master or manually via workflow_dispatch.
+  build-apk:
+    if: github.ref == 'refs/heads/master' || github.event.inputs.build_apk == 'true'
+    needs: android-env
     runs-on: ubuntu-latest
 
     steps:
@@ -46,6 +118,23 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Cache the .buildozer directory — contains Android SDK/NDK (~1 GB) and
+      # all compiled ARM packages.  Key includes the spec hash so the cache is
+      # invalidated automatically when requirements or Android settings change.
+      - name: Cache .buildozer
+        uses: actions/cache@v4
+        with:
+          path: .buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+
       - name: Install system dependencies
         run: |
           sudo apt-get update -qq
@@ -54,7 +143,7 @@ jobs:
             libffi-dev libssl-dev \
             libjpeg-dev libpng-dev zlib1g-dev \
             pkg-config autoconf automake libtool \
-            openjdk-17-jdk unzip
+            unzip
 
       - name: Install buildozer + cython
         run: pip install buildozer cython
