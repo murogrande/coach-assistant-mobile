@@ -8,7 +8,12 @@ from datetime import date, timedelta
 import requests
 from typing import Optional, Dict, List
 
-TOKEN_FILE = os.path.join(os.path.expanduser("~"), ".coach_assistant_token.json")
+# On Android (p4a), expanduser("~") resolves to /data which is not writable.
+# Fall back to the app's internal files directory (parent of the working dir).
+_token_dir = os.path.expanduser("~")
+if not os.access(_token_dir, os.W_OK):
+    _token_dir = os.path.dirname(os.getcwd())
+TOKEN_FILE = os.path.join(_token_dir, ".coach_assistant_token.json")
 
 
 class APIClient:
@@ -17,15 +22,14 @@ class APIClient:
     # TODO: Change this to your backend URL
     # For local testing: "http://localhost:8000/api"
     # For testing on phone: "http://YOUR_COMPUTER_IP:8000/api"
-    API_BASE_URL = "http://localhost:8000/api"
+    # API_BASE_URL = "http://localhost:8000/api"
+    API_BASE_URL = "http://192.168.1.54:8000/api"
 
     def __init__(self):
         """Initialise the client with empty auth state."""
         self.token: Optional[str] = None
         self.username: Optional[str] = None
-        self.headers = {
-            "Content-Type": "application/json"
-        }
+        self.headers = {"Content-Type": "application/json"}
 
     def _update_auth_header(self):
         """Update authorization header with current token"""
@@ -44,10 +48,7 @@ class APIClient:
             Dict with user info and token
         """
         url = f"{self.API_BASE_URL}/auth/login/"
-        data = {
-            "username": username,
-            "password": password
-        }
+        data = {"username": username, "password": password}
 
         response = requests.post(url, json=data)
         response.raise_for_status()
@@ -75,11 +76,7 @@ class APIClient:
             Dict with user info
         """
         url = f"{self.API_BASE_URL}/auth/register/"
-        data = {
-            "username": username,
-            "password": password,
-            "email": email
-        }
+        data = {"username": username, "password": password, "email": email}
 
         response = requests.post(url, json=data)
         response.raise_for_status()
@@ -141,7 +138,9 @@ class APIClient:
         response.raise_for_status()
         return response.json()
 
-    def update_goal(self, goal_id: int, completed: bool = None, goal_text: str = None) -> Dict:
+    def update_goal(
+        self, goal_id: int, completed: bool = None, goal_text: str = None
+    ) -> Dict:
         """Update goal status or text"""
         url = f"{self.API_BASE_URL}/goals/{goal_id}/"
         data = {}
@@ -177,14 +176,12 @@ class APIClient:
         response.raise_for_status()
         return response.json()
 
-    def create_journal_entry(self, date_str: str, content: str, language: str = "en") -> Dict:
+    def create_journal_entry(
+        self, date_str: str, content: str, language: str = "en"
+    ) -> Dict:
         """Create new journal entry"""
         url = f"{self.API_BASE_URL}/journal/"
-        data = {
-            "date": date_str,
-            "content": content,
-            "language": language
-        }
+        data = {"date": date_str, "content": content, "language": language}
         response = requests.post(url, json=data, headers=self.headers)
         response.raise_for_status()
         return response.json()
@@ -201,9 +198,7 @@ class APIClient:
     def generate_analysis(self, week_start_date: str) -> Dict:
         """Request weekly analysis generation"""
         url = f"{self.API_BASE_URL}/analysis/generate/"
-        data = {
-            "week_start_date": week_start_date
-        }
+        data = {"week_start_date": week_start_date}
         response = requests.post(url, json=data, headers=self.headers)
         response.raise_for_status()
         return response.json()

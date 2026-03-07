@@ -102,6 +102,12 @@ class TestRequirements:
         reqs = self._get_reqs()
         assert any("dateutil" in r for r in reqs), "python-dateutil must be in requirements"
 
+    def test_asynckivy_in_requirements(self):
+        """asynckivy + asyncgui are required by KivyMD 2.x master on Android."""
+        reqs = self._get_reqs()
+        assert "asynckivy" in reqs, "asynckivy must be in requirements (KivyMD 2.x dependency)"
+        assert "asyncgui" in reqs, "asyncgui must be in requirements (asynckivy dependency)"
+
     def test_ssl_deps_in_requirements(self):
         reqs = self._get_reqs()
         assert "certifi" in reqs, "certifi must be in requirements (SSL for requests on Android)"
@@ -220,9 +226,8 @@ class TestAPIClientAndroidCompat:
         # Not an assertion failure — just a warning. The URL is valid for desktop testing.
         assert True
 
-    def test_token_file_uses_expanduser(self):
-        """Token storage must use expanduser so it resolves correctly on Android."""
+    def test_token_file_has_android_fallback(self):
+        """TOKEN_FILE must fall back to a writable dir when ~ isn't writable (Android)."""
         source = self._read_client()
-        assert "expanduser" in source, (
-            "TOKEN_FILE must use os.path.expanduser so it works on Android"
-        )
+        assert "expanduser" in source, "TOKEN_FILE must start with expanduser"
+        assert "os.access" in source, "TOKEN_FILE must check if ~ is writable (Android fallback)"
