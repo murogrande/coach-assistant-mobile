@@ -19,11 +19,8 @@ TOKEN_FILE = os.path.join(_token_dir, ".coach_assistant_token.json")
 class APIClient:
     """Handles all API communication with the backend"""
 
-    # TODO: Change this to your backend URL
-    # For local testing: "http://localhost:8000/api"
-    # For testing on phone: "http://YOUR_COMPUTER_IP:8000/api"
-    # API_BASE_URL = "http://localhost:8000/api"
-    API_BASE_URL = "http://192.168.1.54:8000/api"
+    # For phone testing: change to your laptop's local IP, e.g. http://192.168.1.x:8000/api
+    API_BASE_URL = "http://localhost:8000/api"
 
     def __init__(self):
         """Initialise the client with empty auth state."""
@@ -139,7 +136,7 @@ class APIClient:
         return response.json()
 
     def update_goal(
-        self, goal_id: int, completed: bool = None, goal_text: str = None
+        self, goal_id: int, completed: Optional[bool] = None, goal_text: Optional[str] = None
     ) -> Dict:
         """Update goal status or text"""
         url = f"{self.API_BASE_URL}/goals/{goal_id}/"
