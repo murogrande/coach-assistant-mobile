@@ -75,12 +75,43 @@ python main.py
 
 ### Build for Android
 
+**System dependencies (one-time, Ubuntu/Debian):**
+```bash
+sudo apt-get install -y build-essential git python3-dev libffi-dev libssl-dev \
+    libjpeg-dev libpng-dev zlib1g-dev pkg-config autoconf automake libtool
+```
+
+**Pre-flight: set the backend URL before building**
+
+The URL is baked into the APK. Edit `services/api_client.py`:
+```python
+API_BASE_URL = "http://192.168.x.x:8000/api"   # your laptop's local IP
+```
+
+Find your IP with: `ip addr show | grep "inet 192"`
+
+Also make sure the backend is reachable from the phone:
+```bash
+# In coach-assistant-backend, bind to all interfaces (not just localhost)
+python manage.py runserver 0.0.0.0:8000
+```
+And add your laptop's IP to `ALLOWED_HOSTS` in the backend `.env`:
+```
+ALLOWED_HOSTS=localhost,127.0.0.1,192.168.x.x
+```
+
+**Build:**
 ```bash
 pip install buildozer
-buildozer init
-buildozer -v android debug       # First build takes ~30 minutes
+buildozer -v android debug       # First build: ~30–60 min (downloads SDK/NDK ~1 GB)
+```
+
+**Deploy to phone (USB, with USB debugging enabled):**
+```bash
 buildozer android deploy run
 ```
+
+Or manually install the APK from `bin/coachassistant-0.1-debug.apk`.
 
 ### Run Tests
 
@@ -106,7 +137,8 @@ python -m pytest tests/end_to_end.py -v     # end-to-end flows only
 - ✅ **Issue #10** — Analysis API integration: load latest on enter, generate with confirmation dialog, threaded API calls, section formatting (str/list/dict), stale-navigation guard (`_active` flag), week nav locked during generation
 
 ### Next
-- 🔲 **Issue #15–16** — Buildozer Android build + device testing
+- ✅ **Issue #15** — Buildozer configured (`buildozer.spec` created)
+- 🔲 **Issue #16** — Test on Android device
 - 🔲 **Issue #21–23** — Multi-provider analysis (OpenAI / Claude / Local Qwen3) — requires backend #39–42 first
 
 **Milestone "POC Ready"** = Issues #1–10, then #15–16 to get on phone.
