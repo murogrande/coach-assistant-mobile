@@ -146,7 +146,7 @@ class APIClient:
         if goal_text is not None:
             data["goal_text"] = goal_text
 
-        response = requests.put(url, json=data, headers=self.headers)
+        response = requests.patch(url, json=data, headers=self.headers)
         response.raise_for_status()
         return response.json()
 

@@ -1143,3 +1143,82 @@ class TestAnalysisScreen:
                 target()
 
         assert "Failed to generate" in screen.analysis_text.text
+
+    def test_copy_btn_hidden_initially(self, screen_manager):
+        """Copy button must be hidden before any analysis is loaded."""
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_copy1")
+        screen_manager.add_widget(screen)
+
+        assert screen._copy_btn.opacity == 0
+        assert screen._copy_btn.disabled is True
+
+    def test_show_analysis_reveals_copy_btn_and_sets_plain_text(self, screen_manager):
+        """show_analysis() makes the copy button visible and populates _analysis_plain_text."""
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_copy2")
+        screen_manager.add_widget(screen)
+
+        data = {
+            "id": 1,
+            "summary": "Great week",
+            "achievements": {"wins": ["Goal A"]},
+            "improvements": "Sleep earlier",
+            "time_analysis": "Good focus",
+            "habits_analysis": "Consistent",
+            "blind_spots": "None",
+        }
+        screen.show_analysis(data)
+
+        assert screen._copy_btn.opacity == 1
+        assert screen._copy_btn.disabled is False
+        assert "Great week" in screen._analysis_plain_text
+        assert "Sleep earlier" in screen._analysis_plain_text
+
+    def test_show_empty_state_hides_copy_btn(self, screen_manager):
+        """show_empty_state() hides the copy button and clears the plain text."""
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_copy3")
+        screen_manager.add_widget(screen)
+
+        data = {"id": 1, "summary": "Week", "achievements": {}, "improvements": "",
+                "time_analysis": "", "habits_analysis": "", "blind_spots": ""}
+        screen.show_analysis(data)
+        screen.show_empty_state()
+
+        assert screen._copy_btn.opacity == 0
+        assert screen._copy_btn.disabled is True
+        assert screen._analysis_plain_text == ""
+
+    def test_copy_analysis_calls_clipboard(self, screen_manager):
+        """_copy_analysis() passes the full plain text to Clipboard.copy()."""
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_copy4")
+        screen_manager.add_widget(screen)
+
+        data = {"id": 1, "summary": "Summary text", "achievements": {},
+                "improvements": "", "time_analysis": "", "habits_analysis": "", "blind_spots": ""}
+        screen.show_analysis(data)
+
+        with patch("screens.analysis.Clipboard.copy") as mock_copy:
+            with patch("screens.analysis.Clock.schedule_once"):
+                screen._copy_analysis()
+
+        mock_copy.assert_called_once_with(screen._analysis_plain_text)
+        assert "Summary text" in mock_copy.call_args[0][0]
+
+    def test_copy_analysis_does_nothing_when_no_text(self, screen_manager):
+        """_copy_analysis() is a no-op when there is no analysis loaded."""
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_copy5")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.analysis.Clipboard.copy") as mock_copy:
+            screen._copy_analysis()
+
+        mock_copy.assert_not_called()

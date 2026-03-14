@@ -63,7 +63,7 @@ Methods:
 - Auth: `login()`, `register()`
 - Goals: `get_goals()`, `create_goal()`, `update_goal()`, `delete_goal()`
 - Journal: `get_journal_entries()`, `get_journal_by_date(date_str)`, `create_journal_entry(date_str, content)`, `update_journal_entry(entry_id, content)`
-- Analysis: `generate_analysis(week_start_date)`, `get_latest_analysis()`
+- Analysis: `generate_analysis(week_start_date)`, `get_latest_analysis()`, `get_analysis_list()`, `delete_analysis(id)`
 
 **Backend URL**: Set `APIClient.API_BASE_URL` in `services/api_client.py`. For phone testing, use your computer's local IP instead of localhost.
 
@@ -81,7 +81,8 @@ Always check `../coach-assistant-backend/api/views.py` before implementing new A
 | Goals | `GET/POST /api/goals/`, `PATCH /api/goals/{id}/` | |
 | Analysis generate | `POST /api/analysis/generate/` | Body: `{week_start_date, provider}` (provider optional, default `"openai"`) |
 | Analysis latest | `GET /api/analysis/latest/` | Query: `?provider=openai\|anthropic\|local` (optional) |
-| Analysis list | `GET /api/analysis/` | Returns all analyses (pending backend #42) |
+| Analysis list | `GET /api/analysis/` | Returns all analyses for the user |
+| Analysis delete | `DELETE /api/analysis/{id}/` | |
 
 ## Screen Layout Pattern
 
@@ -126,13 +127,13 @@ BG = (0.96, 0.96, 0.96, 1)
 | #8 | Implement Journal API Integration | ✅ Done |
 | #9 | Implement Weekly Analysis Screen UI | ✅ Done |
 | #10 | Implement Analysis API Integration | ✅ Done |
-| #15 | Setup Buildozer for Android Build | 🔲 Pending |
-| #16 | Test on Android Device | 🔲 Pending |
+| #15 | Setup Buildozer for Android Build | ✅ Done |
+| #16 | Test on Android Device | ✅ Done |
 | #21 | Multi-Provider Support in API Client | 🔲 Pending |
 | #22 | Provider Selector UI on Analysis Screen | 🔲 Pending |
 | #23 | Compare Analyses from Multiple Providers | 🔲 Pending |
 
-**Milestone "POC Ready"** = Issues #1–10, then #15–16 to get on phone.
+**Milestone "POC Ready"** = Issues #1–10, #15–16 ✅ Complete.
 **Milestone "Multi-Provider"** = Issues #21–23 (mobile) + #39–42 (backend). Requires backend work first.
 
 ### Analysis screen (Issues #9 + #10) — what's implemented
@@ -142,8 +143,11 @@ BG = (0.96, 0.96, 0.96, 1)
 - Loading spinner (`MDCircularProgressIndicator`) + message
 - Empty state card with placeholder text
 - Display helpers: `show_analysis(data)`, `show_loading(bool)`, `show_empty_state()`
+- `load_for_week()` calls `get_analysis_list()` and filters by `week_start_date` (replaces old `load_latest()`)
+- `_current_analysis_id` saved in `show_analysis()`, cleared in `show_empty_state()`
+- Footer has two buttons: "Generate/Regenerate Analysis" (filled) + "Delete Analysis" (outlined, hidden when no analysis)
 - `analysis_text` attribute preserved for test compatibility
-- `on_enter` calls `load_latest()` automatically; `on_leave` clears `_active` flag
+- `on_enter` calls `load_for_week()` automatically; `on_leave` clears `_active` flag
 - `_active` flag guards all `Clock.schedule_once` callbacks — UI skipped if user navigated away
 - Week nav buttons (`_prev_btn`, `_next_btn`) disabled during generation; week label replaced with "Week navigation unavailable during generation"
 - `generate_analysis()` shows confirmation dialog before calling API
@@ -159,11 +163,24 @@ BG = (0.96, 0.96, 0.96, 1)
 - API calls run in background threads; UI updates via `Clock.schedule_once`
 - `logout()` clears token from memory and deletes the file
 
+## CI/CD
+
+- `.github/workflows/tests.yml`: runs pre-commit + pytest (with Xvfb :99 for headless Kivy)
+- `.github/workflows/android.yml`: 3-stage Android pipeline:
+  1. `validate` — runs `tests/test_buildozer.py` (fast, no Android toolchain)
+  2. `android-env` — installs buildozer + Java, validates spec with buildozer's own parser
+  3. `build-apk` — full APK build on ubuntu-22.04; only runs on push to `master` or manual dispatch; uploads APK as artifact (7-day retention)
+- `.pre-commit-config.yaml`: trailing-whitespace, end-of-file-fixer, check-yaml, check-merge-conflict, debug-statements, ruff (--fix)
+- `ruff.toml`: line-length=120, select E/F/W, ignore E501, F841 ignored in tests/
+
+**APK build note**: ubuntu-22.04 is required (24.04 ships autoconf/libtool versions that break p4a libffi). First build ~60 min; subsequent runs ~5–10 min via cached `~/.buildozer/` (SDK/NDK).
+
 ## Testing Guidelines
 
 - Always mock API calls using `unittest.mock.patch`
 - Use the `screen_manager` fixture from `conftest.py` for screen tests
 - Tests run headlessly (SDL dummy driver configured in `conftest.py`)
-- 95 tests currently passing
+- 136 tests currently passing
 - Unit tests: `tests/test_screens.py`, `tests/test_api_client.py`
+- buildozer.spec validation: `tests/test_buildozer.py` (runs in CI without full Android toolchain)
 - End-to-end flow tests: `tests/end_to_end.py` (journal and goals full cycles)

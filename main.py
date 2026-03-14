@@ -3,7 +3,15 @@ Coach Assistant Mobile App
 Main entry point for the KivyMD application
 """
 
+from kivy.config import Config
+
+Config.set("input", "mouse", "mouse,disable_multitouch")
+Config.set("graphics", "width", "400")
+Config.set("graphics", "height", "800")
+
 from kivymd.app import MDApp
+from kivy.clock import Clock
+from kivy.core.window import Window
 from kivy.uix.screenmanager import ScreenManager
 
 from screens import (
@@ -21,6 +29,12 @@ class CoachAssistantApp(MDApp):
 
     def build(self):
         """Build and return the root widget"""
+        Window.minimum_width = 320
+        Window.minimum_height = 500
+        Window.softinput_mode = "below_target"
+        self._resize_trigger = Clock.create_trigger(self._on_resize_settle, 0.15)
+        Window.bind(on_resize=lambda *_: self._resize_trigger())
+
         self.theme_cls.primary_palette = "Blue"
         self.theme_cls.accent_palette = "Teal"
         self.theme_cls.theme_style = "Light"
@@ -35,6 +49,11 @@ class CoachAssistantApp(MDApp):
         sm.add_widget(AnalysisScreen(name="analysis"))
 
         return sm
+
+    def _on_resize_settle(self, dt):
+        """Called once after the window stops being resized (debounced 150 ms)."""
+        if self.root:
+            self.root.do_layout()
 
     def on_start(self):
         """Called when the application starts"""

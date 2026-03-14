@@ -8,3 +8,6 @@ ignore = ["E501"]  # line length handled by formatter, not linter
 "tests/**" = [
     "F841",  # unused variable (common in mock-heavy tests)
 ]
+"main.py" = [
+    "E402",  # Kivy requires Config.set() before any other kivy imports
+]

@@ -175,6 +175,21 @@ class TestAPIClient:
         expected_monday = (today - timedelta(days=today.weekday())).isoformat()
         assert payload["week_start_date"] == expected_monday
 
+    @patch("services.api_client.requests.patch")
+    def test_update_goal_uses_patch(self, mock_patch):
+        """update_goal must use PATCH (not PUT) — PUT returns 400 Bad Request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"id": 7, "completed": True}
+        mock_response.raise_for_status = MagicMock()
+        mock_patch.return_value = mock_response
+
+        client = APIClient()
+        client.update_goal(7, completed=True)
+
+        mock_patch.assert_called_once()
+        assert "goals/7/" in mock_patch.call_args[0][0]
+        assert mock_patch.call_args[1]["json"]["completed"] is True
+
     @patch("services.api_client.requests.delete")
     def test_delete_goal(self, mock_delete):
         """Test delete_goal sends DELETE request"""
