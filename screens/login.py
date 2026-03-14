@@ -192,6 +192,11 @@ class LoginScreen(MDScreen):
     def toggle_password_visibility(self, *args):
         """Toggle the password field between plain text and masked input."""
         self.password_field.password = not self.password_field.password
+        # KivyMD 2.x doesn't re-render existing text when password mode changes at runtime.
+        # Reassigning the text forces the field to redraw with the new mode.
+        text = self.password_field.text
+        self.password_field.text = ""
+        self.password_field.text = text
         self.eye_btn.icon = "eye-off" if not self.password_field.password else "eye"
 
     def toggle_mode(self, *args):

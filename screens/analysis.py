@@ -4,6 +4,7 @@ import threading
 from datetime import date, timedelta
 
 from kivy.clock import Clock
+from kivy.core.clipboard import Clipboard
 from kivymd.uix.card import MDCard
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.button import MDButton, MDButtonText, MDIconButton
@@ -70,6 +71,7 @@ class AnalysisScreen(MDScreen):
         self._current_analysis_id = None
         self._status_event = None
         self._status_index = 0
+        self._analysis_plain_text = ""
         self.build_ui()
 
     def build_ui(self):
@@ -102,6 +104,15 @@ class AnalysisScreen(MDScreen):
             adaptive_height=True,
             pos_hint={"center_y": 0.5},
         ))
+        self._copy_btn = MDIconButton(
+            icon="content-copy",
+            theme_icon_color="Custom",
+            icon_color=WHITE,
+            on_release=lambda _: self._copy_analysis(),
+            opacity=0,
+            disabled=True,
+        )
+        top_row.add_widget(self._copy_btn)
         header.add_widget(top_row)
         header.add_widget(MDLabel(
             text="AI-powered insights",
@@ -365,9 +376,15 @@ class AnalysisScreen(MDScreen):
         self._prev_btn.disabled = False
         self._next_btn.disabled = False
         self.week_label.text = self._week_text()
-        for key, _, _ in _SECTIONS:
-            self._section_labels[key].text = self._format_section(data.get(key, ""))
+        parts = [f"Weekly Analysis — {self._week_text()}"]
+        for key, title, _ in _SECTIONS:
+            text = self._format_section(data.get(key, ""))
+            self._section_labels[key].text = text
             self._section_cards[key].opacity = 1
+            parts.append(f"\n{title}\n{text}")
+        self._analysis_plain_text = "\n".join(parts)
+        self._copy_btn.opacity = 1
+        self._copy_btn.disabled = False
         self._generate_btn_text.text = "Regenerate Analysis"
         self.delete_btn.opacity = 1
         self.delete_btn.disabled = False
@@ -382,6 +399,9 @@ class AnalysisScreen(MDScreen):
         self._next_btn.disabled = False
         self.week_label.text = self._week_text()
         self._hide_sections()
+        self._analysis_plain_text = ""
+        self._copy_btn.opacity = 0
+        self._copy_btn.disabled = True
         self._generate_btn_text.text = "Generate Analysis"
         self.delete_btn.opacity = 0
         self.delete_btn.disabled = True
@@ -389,6 +409,14 @@ class AnalysisScreen(MDScreen):
     def _hide_sections(self):
         for key in self._section_cards:
             self._section_cards[key].opacity = 0
+
+    def _copy_analysis(self):
+        """Copy the full analysis text to the clipboard."""
+        if not self._analysis_plain_text:
+            return
+        Clipboard.copy(self._analysis_plain_text)
+        self._copy_btn.icon = "check"
+        Clock.schedule_once(lambda _: setattr(self._copy_btn, "icon", "content-copy"), 2)
 
     # --- Navigation & API ---
 

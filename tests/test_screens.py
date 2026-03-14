@@ -123,6 +123,55 @@ class TestLoginScreen:
 
         assert result is True
 
+    def test_password_field_starts_masked(self, screen_manager):
+        """Password field must be masked (password=True) on initial render."""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login_pw0")
+        screen_manager.add_widget(screen)
+
+        assert screen.password_field.password is True
+        assert screen.eye_btn.icon == "eye"
+
+    def test_toggle_password_visibility_reveals_password(self, screen_manager):
+        """Tapping the eye button must set password=False to reveal the text."""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login_pw1")
+        screen_manager.add_widget(screen)
+        screen.password_field.text = "secret"
+
+        screen.toggle_password_visibility()
+
+        assert screen.password_field.password is False
+        assert screen.eye_btn.icon == "eye-off"
+
+    def test_toggle_password_visibility_rehides_password(self, screen_manager):
+        """Tapping the eye button a second time must re-mask the password."""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login_pw2")
+        screen_manager.add_widget(screen)
+        screen.password_field.text = "secret"
+
+        screen.toggle_password_visibility()
+        screen.toggle_password_visibility()
+
+        assert screen.password_field.password is True
+        assert screen.eye_btn.icon == "eye"
+
+    def test_toggle_password_visibility_preserves_text(self, screen_manager):
+        """KivyMD 2.x fix: text must be reassigned to force re-render — value must not be lost."""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login_pw3")
+        screen_manager.add_widget(screen)
+        screen.password_field.text = "mypassword"
+
+        screen.toggle_password_visibility()
+
+        assert screen.password_field.text == "mypassword"
+
     def test_toggle_mode_switches_to_register(self, screen_manager):
         """Test toggle_mode switches to register mode"""
         from screens.login import LoginScreen
@@ -1143,3 +1192,82 @@ class TestAnalysisScreen:
                 target()
 
         assert "Failed to generate" in screen.analysis_text.text
+
+    def test_copy_btn_hidden_initially(self, screen_manager):
+        """Copy button must be hidden before any analysis is loaded."""
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_copy1")
+        screen_manager.add_widget(screen)
+
+        assert screen._copy_btn.opacity == 0
+        assert screen._copy_btn.disabled is True
+
+    def test_show_analysis_reveals_copy_btn_and_sets_plain_text(self, screen_manager):
+        """show_analysis() makes the copy button visible and populates _analysis_plain_text."""
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_copy2")
+        screen_manager.add_widget(screen)
+
+        data = {
+            "id": 1,
+            "summary": "Great week",
+            "achievements": {"wins": ["Goal A"]},
+            "improvements": "Sleep earlier",
+            "time_analysis": "Good focus",
+            "habits_analysis": "Consistent",
+            "blind_spots": "None",
+        }
+        screen.show_analysis(data)
+
+        assert screen._copy_btn.opacity == 1
+        assert screen._copy_btn.disabled is False
+        assert "Great week" in screen._analysis_plain_text
+        assert "Sleep earlier" in screen._analysis_plain_text
+
+    def test_show_empty_state_hides_copy_btn(self, screen_manager):
+        """show_empty_state() hides the copy button and clears the plain text."""
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_copy3")
+        screen_manager.add_widget(screen)
+
+        data = {"id": 1, "summary": "Week", "achievements": {}, "improvements": "",
+                "time_analysis": "", "habits_analysis": "", "blind_spots": ""}
+        screen.show_analysis(data)
+        screen.show_empty_state()
+
+        assert screen._copy_btn.opacity == 0
+        assert screen._copy_btn.disabled is True
+        assert screen._analysis_plain_text == ""
+
+    def test_copy_analysis_calls_clipboard(self, screen_manager):
+        """_copy_analysis() passes the full plain text to Clipboard.copy()."""
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_copy4")
+        screen_manager.add_widget(screen)
+
+        data = {"id": 1, "summary": "Summary text", "achievements": {},
+                "improvements": "", "time_analysis": "", "habits_analysis": "", "blind_spots": ""}
+        screen.show_analysis(data)
+
+        with patch("screens.analysis.Clipboard.copy") as mock_copy:
+            with patch("screens.analysis.Clock.schedule_once"):
+                screen._copy_analysis()
+
+        mock_copy.assert_called_once_with(screen._analysis_plain_text)
+        assert "Summary text" in mock_copy.call_args[0][0]
+
+    def test_copy_analysis_does_nothing_when_no_text(self, screen_manager):
+        """_copy_analysis() is a no-op when there is no analysis loaded."""
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name="analysis_copy5")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.analysis.Clipboard.copy") as mock_copy:
+            screen._copy_analysis()
+
+        mock_copy.assert_not_called()
