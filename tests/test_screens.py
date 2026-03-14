@@ -123,6 +123,55 @@ class TestLoginScreen:
 
         assert result is True
 
+    def test_password_field_starts_masked(self, screen_manager):
+        """Password field must be masked (password=True) on initial render."""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login_pw0")
+        screen_manager.add_widget(screen)
+
+        assert screen.password_field.password is True
+        assert screen.eye_btn.icon == "eye"
+
+    def test_toggle_password_visibility_reveals_password(self, screen_manager):
+        """Tapping the eye button must set password=False to reveal the text."""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login_pw1")
+        screen_manager.add_widget(screen)
+        screen.password_field.text = "secret"
+
+        screen.toggle_password_visibility()
+
+        assert screen.password_field.password is False
+        assert screen.eye_btn.icon == "eye-off"
+
+    def test_toggle_password_visibility_rehides_password(self, screen_manager):
+        """Tapping the eye button a second time must re-mask the password."""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login_pw2")
+        screen_manager.add_widget(screen)
+        screen.password_field.text = "secret"
+
+        screen.toggle_password_visibility()
+        screen.toggle_password_visibility()
+
+        assert screen.password_field.password is True
+        assert screen.eye_btn.icon == "eye"
+
+    def test_toggle_password_visibility_preserves_text(self, screen_manager):
+        """KivyMD 2.x fix: text must be reassigned to force re-render — value must not be lost."""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login_pw3")
+        screen_manager.add_widget(screen)
+        screen.password_field.text = "mypassword"
+
+        screen.toggle_password_visibility()
+
+        assert screen.password_field.text == "mypassword"
+
     def test_toggle_mode_switches_to_register(self, screen_manager):
         """Test toggle_mode switches to register mode"""
         from screens.login import LoginScreen

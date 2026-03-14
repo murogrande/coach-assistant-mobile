@@ -34,6 +34,7 @@ class CoachAssistantApp(MDApp):
         Window.softinput_mode = "below_target"
         self._resize_trigger = Clock.create_trigger(self._on_resize_settle, 0.15)
         Window.bind(on_resize=lambda *_: self._resize_trigger())
+        Window.bind(on_keyboard=self._on_keyboard)
 
         self.theme_cls.primary_palette = "Blue"
         self.theme_cls.accent_palette = "Teal"
@@ -49,6 +50,15 @@ class CoachAssistantApp(MDApp):
         sm.add_widget(AnalysisScreen(name="analysis"))
 
         return sm
+
+    def _on_keyboard(self, window, key, scancode, codepoint, modifier):
+        """Handle the Android hardware back button (key 27 = ESC/back)."""
+        if key == 27:
+            current = self.root.current
+            if current in ("goals", "journal", "analysis"):
+                self.root.current = "home"
+                return True  # consume — prevents the app from exiting
+        return False
 
     def _on_resize_settle(self, dt):
         """Called once after the window stops being resized (debounced 150 ms)."""
