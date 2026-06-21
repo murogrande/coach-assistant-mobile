@@ -50,7 +50,7 @@ class APIClient:
         url = f"{self.API_BASE_URL}/auth/login/"
         data = {"username": username, "password": password}
 
-        response = requests.post(url, json=data)
+        response = requests.post(url, json=data, timeout=self.REQUEST_TIMEOUT)
         response.raise_for_status()
 
         result = response.json()
@@ -79,7 +79,7 @@ class APIClient:
         url = f"{self.API_BASE_URL}/auth/register/"
         data = {"username": username, "password": password, "email": email}
 
-        response = requests.post(url, json=data)
+        response = requests.post(url, json=data, timeout=self.REQUEST_TIMEOUT)
         response.raise_for_status()
 
         return response.json()

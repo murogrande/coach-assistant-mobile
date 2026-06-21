@@ -180,7 +180,7 @@ BG = (0.96, 0.96, 0.96, 1)
 - Always mock API calls using `unittest.mock.patch`
 - Use the `screen_manager` fixture from `conftest.py` for screen tests
 - Tests run headlessly (SDL dummy driver configured in `conftest.py`)
-- 155 tests currently passing
+- 157 tests currently passing
 - Unit tests: `tests/test_screens.py`, `tests/test_api_client.py`
 - buildozer.spec validation: `tests/test_buildozer.py` (runs in CI without full Android toolchain)
 - End-to-end flow tests: `tests/end_to_end.py` (journal and goals full cycles)

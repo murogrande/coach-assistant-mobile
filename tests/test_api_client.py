@@ -90,6 +90,32 @@ class TestAPIClient:
         call_args = mock_post.call_args
         assert "register" in call_args[0][0]
 
+    @patch("services.api_client.requests.post")
+    def test_login_uses_timeout(self, mock_post):
+        """login() must pass a timeout so a hung connection can't freeze the auth thread."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"token": "abc123", "user": {"id": 1}}
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        client = APIClient()
+        with patch("builtins.open", MagicMock()), patch("services.api_client.json.dump"):
+            client.login("testuser", "password")
+
+        assert mock_post.call_args.kwargs["timeout"] == APIClient.REQUEST_TIMEOUT
+
+    @patch("services.api_client.requests.post")
+    def test_register_uses_timeout(self, mock_post):
+        """register() must pass a timeout so a hung connection can't freeze the auth thread."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"id": 1, "username": "newuser"}
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        APIClient().register("newuser", "password", "email@test.com")
+
+        assert mock_post.call_args.kwargs["timeout"] == APIClient.REQUEST_TIMEOUT
+
     def test_is_authenticated_false_without_token(self):
         """Test is_authenticated returns False when no token"""
         client = APIClient()
