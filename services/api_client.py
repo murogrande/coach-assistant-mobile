@@ -94,11 +94,14 @@ class APIClient:
         """Persist the current access and refresh tokens to disk"""
         if self.token:
             with open(TOKEN_FILE, "w") as f:
-                json.dump({
-                    "access_token": self.token,
-                    "refresh_token": self.refresh_token,
-                    "username": self.username,
-                }, f)
+                json.dump(
+                    {
+                        "access_token": self.token,
+                        "refresh_token": self.refresh_token,
+                        "username": self.username,
+                    },
+                    f,
+                )
 
     def load_token(self) -> Optional[str]:
         """Load persisted tokens and username from disk"""
@@ -148,7 +151,9 @@ class APIClient:
             url = f"{self.API_BASE_URL}/auth/token/refresh/"
             try:
                 response = requests.post(
-                    url, json={"refresh": self.refresh_token}, timeout=self.REQUEST_TIMEOUT
+                    url,
+                    json={"refresh": self.refresh_token},
+                    timeout=self.REQUEST_TIMEOUT,
                 )
             except Exception:
                 return False
@@ -212,7 +217,9 @@ class APIClient:
             data["completed"] = completed
         if goal_text is not None:
             data["goal_text"] = goal_text
-        return self._request("patch", f"{self.API_BASE_URL}/goals/{goal_id}/", json=data).json()
+        return self._request(
+            "patch", f"{self.API_BASE_URL}/goals/{goal_id}/", json=data
+        ).json()
 
     def delete_goal(self, goal_id: int) -> None:
         """Delete a goal by ID"""
@@ -231,7 +238,9 @@ class APIClient:
             return None
         return response.json()
 
-    def create_journal_entry(self, date_str: str, content: str, language: str = "en") -> Dict:
+    def create_journal_entry(
+        self, date_str: str, content: str, language: str = "en"
+    ) -> Dict:
         """Create new journal entry"""
         data = {"date": date_str, "content": content, "language": language}
         return self._request("post", f"{self.API_BASE_URL}/journal/", json=data).json()
@@ -239,7 +248,9 @@ class APIClient:
     def update_journal_entry(self, entry_id: int, content: str) -> Dict:
         """Update existing journal entry by ID"""
         return self._request(
-            "patch", f"{self.API_BASE_URL}/journal/{entry_id}/", json={"content": content}
+            "patch",
+            f"{self.API_BASE_URL}/journal/{entry_id}/",
+            json={"content": content},
         ).json()
 
     # Analysis endpoints
