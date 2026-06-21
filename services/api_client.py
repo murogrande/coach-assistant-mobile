@@ -120,7 +120,13 @@ class APIClient:
             os.remove(TOKEN_FILE)
 
     def _refresh_access_token(self) -> bool:
-        """Use the refresh token to obtain a new access token. Returns True on success."""
+        """Use the refresh token to obtain a new access token. Returns True on success.
+
+        If the server rejects the refresh token (401 — it has expired or been
+        revoked), the stored session is cleared so the app falls back to the
+        login screen instead of looping on 401s with a dead token. Network/
+        connection errors leave the token intact so a later retry can succeed.
+        """
         if not self.refresh_token:
             return False
         url = f"{self.API_BASE_URL}/auth/token/refresh/"
@@ -128,25 +134,34 @@ class APIClient:
             response = requests.post(
                 url, json={"refresh": self.refresh_token}, timeout=self.REQUEST_TIMEOUT
             )
-            if response.status_code == 200:
-                self.token = response.json().get("access")
-                if self.token:
-                    self._update_auth_header()
-                    self.save_token()
-                    return True
         except Exception:
-            pass
+            return False
+        if response.status_code == 200:
+            self.token = response.json().get("access")
+            if self.token:
+                self._update_auth_header()
+                self.save_token()
+                return True
+        elif response.status_code == 401:
+            self.logout()
         return False
 
-    def _request(self, method: str, url: str, **kwargs) -> requests.Response:
-        """Make an HTTP request with timeout, retrying once after a token refresh on 401."""
+    def _request(
+        self, method: str, url: str, allow_statuses: tuple = (), **kwargs
+    ) -> requests.Response:
+        """Make an HTTP request with timeout, retrying once after a token refresh on 401.
+
+        Statuses listed in ``allow_statuses`` (e.g. 404) are returned to the
+        caller without raising, so endpoints can map them to None/[] themselves.
+        """
         kwargs.setdefault("headers", self.headers)
         kwargs.setdefault("timeout", self.REQUEST_TIMEOUT)
         response = getattr(requests, method)(url, **kwargs)
         if response.status_code == 401 and self._refresh_access_token():
             kwargs["headers"] = self.headers
             response = getattr(requests, method)(url, **kwargs)
-        response.raise_for_status()
+        if response.status_code not in allow_statuses:
+            response.raise_for_status()
         return response
 
     def is_authenticated(self) -> bool:
@@ -195,12 +210,9 @@ class APIClient:
     def get_journal_by_date(self, date_str: str) -> Optional[Dict]:
         """Get journal entry for specific date (YYYY-MM-DD)"""
         url = f"{self.API_BASE_URL}/journal/by-date/{date_str}/"
-        response = requests.get(url, headers=self.headers, timeout=self.REQUEST_TIMEOUT)
-        if response.status_code == 401 and self._refresh_access_token():
-            response = requests.get(url, headers=self.headers, timeout=self.REQUEST_TIMEOUT)
+        response = self._request("get", url, allow_statuses=(404,))
         if response.status_code == 404:
             return None
-        response.raise_for_status()
         return response.json()
 
     def create_journal_entry(self, date_str: str, content: str, language: str = "en") -> Dict:
@@ -227,23 +239,17 @@ class APIClient:
     def get_latest_analysis(self) -> Optional[Dict]:
         """Get most recent weekly analysis"""
         url = f"{self.API_BASE_URL}/analysis/latest/"
-        response = requests.get(url, headers=self.headers, timeout=self.REQUEST_TIMEOUT)
-        if response.status_code == 401 and self._refresh_access_token():
-            response = requests.get(url, headers=self.headers, timeout=self.REQUEST_TIMEOUT)
+        response = self._request("get", url, allow_statuses=(404,))
         if response.status_code == 404:
             return None
-        response.raise_for_status()
         return response.json()
 
     def get_analysis_list(self) -> List[Dict]:
         """Get all weekly analyses for the current user"""
         url = f"{self.API_BASE_URL}/analysis/"
-        response = requests.get(url, headers=self.headers, timeout=self.REQUEST_TIMEOUT)
-        if response.status_code == 401 and self._refresh_access_token():
-            response = requests.get(url, headers=self.headers, timeout=self.REQUEST_TIMEOUT)
+        response = self._request("get", url, allow_statuses=(404,))
         if response.status_code == 404:
             return []
-        response.raise_for_status()
         return response.json()
 
     def delete_analysis(self, analysis_id: int) -> None:

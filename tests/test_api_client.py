@@ -328,11 +328,36 @@ class TestTokenRefresh:
 
     @patch("services.api_client.requests.post", side_effect=Exception("network error"))
     def test_refresh_access_token_network_failure(self, _):
-        """_refresh_access_token() returns False on network error."""
+        """_refresh_access_token() returns False on network error, keeping the token."""
         client = APIClient()
+        client.token = "old-access-tok"
         client.refresh_token = "refresh-tok"
 
         assert client._refresh_access_token() is False
+        # Network error must NOT wipe the session — a later retry may succeed.
+        assert client.token == "old-access-tok"
+        assert client.refresh_token == "refresh-tok"
+
+    @patch("services.api_client.requests.post")
+    def test_refresh_access_token_expired_clears_session(self, mock_post):
+        """A 401 from the refresh endpoint (expired/revoked) clears the session."""
+        rejected = MagicMock()
+        rejected.status_code = 401
+        mock_post.return_value = rejected
+
+        client = APIClient()
+        client.token = "dead-access-tok"
+        client.refresh_token = "expired-refresh-tok"
+        client._update_auth_header()
+
+        with patch.object(client, "logout", wraps=client.logout) as mock_logout:
+            result = client._refresh_access_token()
+
+        assert result is False
+        mock_logout.assert_called_once()
+        assert client.token is None
+        assert client.refresh_token is None
+        assert "Authorization" not in client.headers
 
     @patch("services.api_client.requests.get")
     def test_request_retries_after_401_and_succeeds(self, mock_get):
