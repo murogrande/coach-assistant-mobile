@@ -20,6 +20,7 @@ from kivymd.uix.screen import MDScreen
 from kivymd.uix.scrollview import MDScrollView
 
 from services.api_client import api_client
+from utils.debounce import debounce
 
 
 BLUE = (0.129, 0.588, 0.953, 1)
@@ -301,6 +302,7 @@ class AnalysisScreen(MDScreen):
         e = end.strftime('%b %d, %Y').replace(' 0', ' ')
         return f"{s} – {e}"
 
+    @debounce()
     def _change_week(self, delta: int):
         self._current_week_start += timedelta(weeks=delta)
         self.week_label.text = self._week_text()
@@ -410,6 +412,7 @@ class AnalysisScreen(MDScreen):
         for key in self._section_cards:
             self._section_cards[key].opacity = 0
 
+    @debounce()
     def _copy_analysis(self):
         """Copy the full analysis text to the clipboard."""
         if not self._analysis_plain_text:
@@ -420,6 +423,7 @@ class AnalysisScreen(MDScreen):
 
     # --- Navigation & API ---
 
+    @debounce()
     def go_back(self):
         """Navigate back to the home screen."""
         self.manager.current = "home"
@@ -464,6 +468,7 @@ class AnalysisScreen(MDScreen):
         else:
             self.analysis_text.text = f"Failed to {context} analysis.\n\n{message}"
 
+    @debounce()
     def generate_analysis(self, *_):
         """Show confirmation dialog before requesting a new analysis."""
         if self._dialog:
@@ -505,6 +510,7 @@ class AnalysisScreen(MDScreen):
             self._dialog.dismiss()
             self._dialog = None
 
+    @debounce()
     def _confirm_delete(self, *_):
         """Show confirmation dialog before deleting the current analysis."""
         if self._dialog:

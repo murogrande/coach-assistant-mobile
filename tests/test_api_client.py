@@ -385,6 +385,31 @@ class TestTokenRefresh:
         assert client.refresh_token is None
         assert "Authorization" not in client.headers
 
+    @patch("services.api_client.requests.post")
+    def test_refresh_access_token_skips_when_already_refreshed(self, mock_post):
+        """If another thread refreshed the access token while we waited for the
+        lock, reuse it instead of firing a redundant (rotation-unsafe) refresh."""
+        client = APIClient()
+        client.token = "stale-tok"
+        client.refresh_token = "refresh-tok"
+
+        # Simulate a concurrent refresh completing while we block on the lock:
+        # entering the lock swaps in a freshly-refreshed access token, so the
+        # in-lock re-check sees token != stale_token and returns early.
+        class FakeLock:
+            def __enter__(self):
+                client.token = "concurrently-refreshed-tok"
+
+            def __exit__(self, *exc):
+                return False
+
+        client._refresh_lock = FakeLock()
+
+        result = client._refresh_access_token()
+
+        assert result is True
+        mock_post.assert_not_called()
+
     @patch("services.api_client.requests.get")
     def test_request_retries_after_401_and_succeeds(self, mock_get):
         """_request() retries once with a new token when the first response is 401."""

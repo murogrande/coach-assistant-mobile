@@ -1,5 +1,6 @@
 """Tests for screen modules"""
 
+from time import sleep
 from unittest.mock import patch, MagicMock
 
 
@@ -154,14 +155,34 @@ class TestLoginScreen:
         screen_manager.add_widget(screen)
         screen.password_field.text = "secret"
 
+        # Two distinct taps (real taps are >150 ms apart; sleep past the debounce
+        # window between them so we exercise the re-hide path, not the guard).
         screen.toggle_password_visibility()
+        sleep(0.16)
         screen.toggle_password_visibility()
 
         assert screen.password_field.password is True
         assert screen.eye_btn.icon == "eye"
 
+    def test_toggle_password_visibility_debounces_double_fire(self, screen_manager):
+        """Android fires on_release twice per tap; the second call within the
+        debounce window must be ignored so the field actually toggles."""
+        from screens.login import LoginScreen
+
+        screen = LoginScreen(name="login_pw_debounce")
+        screen_manager.add_widget(screen)
+        screen.password_field.text = "secret"
+
+        # Simulate one physical tap arriving as two rapid events.
+        screen.toggle_password_visibility()
+        screen.toggle_password_visibility()
+
+        # Net effect of one tap: password revealed exactly once, not toggled back.
+        assert screen.password_field.password is False
+        assert screen.eye_btn.icon == "eye-off"
+
     def test_toggle_password_visibility_preserves_text(self, screen_manager):
-        """KivyMD 2.x fix: text must be reassigned to force re-render — value must not be lost."""
+        """Toggling visibility must not lose the entered password text."""
         from screens.login import LoginScreen
 
         screen = LoginScreen(name="login_pw3")

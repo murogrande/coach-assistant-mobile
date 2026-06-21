@@ -4,6 +4,7 @@ API Client for communicating with Django backend
 
 import os
 import json
+import threading
 from datetime import date, timedelta
 import requests
 from typing import Optional, Dict, List
@@ -30,6 +31,11 @@ class APIClient:
         self.refresh_token: Optional[str] = None
         self.username: Optional[str] = None
         self.headers = {"Content-Type": "application/json"}
+        # Serialises token refreshes: API calls run on background threads, so
+        # several can hit a 401 at once. Without this they would each fire a
+        # refresh, and if the backend ever rotates refresh tokens the extra
+        # calls would invalidate each other's tokens.
+        self._refresh_lock = threading.Lock()
 
     def _update_auth_header(self):
         """Update authorization header with current token"""
@@ -126,25 +132,35 @@ class APIClient:
         revoked), the stored session is cleared so the app falls back to the
         login screen instead of looping on 401s with a dead token. Network/
         connection errors leave the token intact so a later retry can succeed.
+
+        The refresh is serialised: concurrent callers that block on the lock
+        re-check whether another thread already refreshed and reuse its result
+        instead of firing a second refresh.
         """
         if not self.refresh_token:
             return False
-        url = f"{self.API_BASE_URL}/auth/token/refresh/"
-        try:
-            response = requests.post(
-                url, json={"refresh": self.refresh_token}, timeout=self.REQUEST_TIMEOUT
-            )
-        except Exception:
-            return False
-        if response.status_code == 200:
-            self.token = response.json().get("access")
-            if self.token:
-                self._update_auth_header()
-                self.save_token()
+        # Token in use when our request failed; if it changes while we wait for
+        # the lock, another thread already refreshed and we can reuse it.
+        stale_token = self.token
+        with self._refresh_lock:
+            if self.token != stale_token:
                 return True
-        elif response.status_code == 401:
-            self.logout()
-        return False
+            url = f"{self.API_BASE_URL}/auth/token/refresh/"
+            try:
+                response = requests.post(
+                    url, json={"refresh": self.refresh_token}, timeout=self.REQUEST_TIMEOUT
+                )
+            except Exception:
+                return False
+            if response.status_code == 200:
+                self.token = response.json().get("access")
+                if self.token:
+                    self._update_auth_header()
+                    self.save_token()
+                    return True
+            elif response.status_code == 401:
+                self.logout()
+            return False
 
     def _request(
         self, method: str, url: str, allow_statuses: tuple = (), **kwargs

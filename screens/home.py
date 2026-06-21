@@ -13,6 +13,7 @@ from kivymd.uix.card import MDCard
 from kivymd.icon_definitions import md_icons
 
 from services.api_client import api_client
+from utils.debounce import debounce
 
 
 BLUE = (0.129, 0.588, 0.953, 1)
@@ -287,6 +288,7 @@ class HomeScreen(MDScreen):
         self.username_label.text = f"Welcome back, {name}" if name else "What would you like to do today?"
         self.load_stats()
 
+    @debounce()
     def load_stats(self):
         """Load goal and journal counts from API in background thread"""
         def _fetch():
@@ -316,6 +318,7 @@ class HomeScreen(MDScreen):
         """Navigate to the given screen by name."""
         self.manager.current = screen_name
 
+    @debounce()
     def do_logout(self, *args):
         """Clear the auth token and return to the login screen."""
         api_client.logout()

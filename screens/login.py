@@ -4,6 +4,9 @@ import threading
 
 import requests
 from kivy.clock import Clock
+from kivy.metrics import dp
+
+from utils.debounce import debounce
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.textfield import MDTextField, MDTextFieldLeadingIcon
@@ -97,20 +100,23 @@ class LoginScreen(MDScreen):
         password_row = MDBoxLayout(
             orientation="horizontal",
             spacing=4,
-            size_hint_x=1,
-            adaptive_height=True,
+            size_hint=(1, None),
+            height=dp(56),
         )
         self.password_field = MDTextField(
             mode="outlined",
             hint_text="Password",
             password=True,
-            size_hint_x=1,
+            size_hint=(1, 1),
         )
         self.password_field.add_widget(MDTextFieldLeadingIcon(icon="lock"))
         password_row.add_widget(self.password_field)
 
         self.eye_btn = MDIconButton(
             icon="eye",
+            size_hint=(None, None),
+            size=(dp(48), dp(48)),
+            pos_hint={"center_y": 0.5},
             on_release=self.toggle_password_visibility,
         )
         password_row.add_widget(self.eye_btn)
@@ -189,15 +195,25 @@ class LoginScreen(MDScreen):
         """Clear any displayed error message."""
         self.error_label.text = ""
 
+    @debounce()
     def toggle_password_visibility(self, *args):
-        """Toggle the password field between plain text and masked input."""
-        self.password_field.password = not self.password_field.password
-        # KivyMD 2.x doesn't re-render existing text when password mode changes at runtime.
-        # Reassigning the text forces the field to redraw with the new mode.
-        text = self.password_field.text
-        self.password_field.text = ""
-        self.password_field.text = text
-        self.eye_btn.icon = "eye-off" if not self.password_field.password else "eye"
+        """Toggle the password field between plain text and masked input.
+
+        Debounced because Android dispatches ``on_release`` twice per physical
+        tap (~1 ms apart); without it the field would toggle twice and end up
+        unchanged.
+        """
+        field = self.password_field
+        field.password = not field.password
+        # Update the icon first so the tap always gives visible feedback even if
+        # the field's re-render lags.
+        self.eye_btn.icon = "eye-off" if not field.password else "eye"
+        # Force the field to repaint with the new masking (KivyMD 2.x doesn't
+        # always re-render when `password` flips at runtime).
+        try:
+            field._refresh_text(field.text)
+        except Exception:
+            pass
 
     def toggle_mode(self, *args):
         """Switch between login and register modes, updating all labels."""
@@ -234,6 +250,7 @@ class LoginScreen(MDScreen):
     # Actions
     # ------------------------------------------------------------------
 
+    @debounce()
     def do_action(self, *args):
         """Validate inputs then dispatch to do_login or do_register."""
         self.clear_error()
