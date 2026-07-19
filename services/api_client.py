@@ -5,9 +5,11 @@ API Client for communicating with Django backend
 import os
 import json
 import threading
-from datetime import date, timedelta
+from datetime import date
 import requests
 from typing import Optional, Dict, List
+
+from utils.week import monday_of
 
 # On Android (p4a), expanduser("~") resolves to /data which is not writable.
 # Fall back to the app's internal files directory (parent of the working dir).
@@ -216,8 +218,7 @@ class APIClient:
                 the Monday of the current week when omitted.
         """
         if week_start_date is None:
-            today = date.today()
-            week_start_date = (today - timedelta(days=today.weekday())).isoformat()
+            week_start_date = monday_of(date.today()).isoformat()
         data = {
             "goal_text": goal_text,
             "category": category,

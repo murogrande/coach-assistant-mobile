@@ -714,6 +714,53 @@ class TestGoalsScreen:
 
         assert card.goal_text == "Local edited"
 
+    def test_on_pre_enter_resets_to_current_week(self, screen_manager):
+        """on_pre_enter snaps back to the current week (not a previously browsed one)."""
+        from datetime import date
+        from screens.goals import GoalsScreen
+        from utils.week import monday_of
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._current_week_start = date(2000, 1, 3)  # a Monday, long in the past
+
+        with patch.object(screen, "load_goals"):
+            screen.on_pre_enter()
+
+        assert screen._current_week_start == monday_of(date.today())
+
+    def test_populate_goals_ignores_stale_week(self, screen_manager):
+        """A response for a week the user already left is dropped, not rendered."""
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._add_goal_card("existing", goal_id=1)
+        before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+
+        # week_start_str for a different week than the one currently selected.
+        screen._populate_goals(
+            [{"id": 2, "goal_text": "stale"}], week_start_str="1999-01-04"
+        )
+
+        after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        assert len(after) == len(before)
+        assert all(c.goal_text != "stale" for c in after)
+
+    def test_load_goals_disables_nav_while_loading(self, screen_manager):
+        """load_goals disables the week arrows until the fetch completes."""
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.load_goals()
+
+        assert screen._prev_btn.disabled is True
+        assert screen._next_btn.disabled is True
+
 
 class TestJournalScreen:
     """Tests for JournalScreen"""

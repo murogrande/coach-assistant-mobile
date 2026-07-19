@@ -21,17 +21,13 @@ from kivymd.uix.textfield import MDTextField
 
 from services.api_client import api_client
 from utils.debounce import debounce
+from utils.week import monday_of, week_range_text
 
 
 BLUE = (0.129, 0.588, 0.953, 1)
 WHITE = (1, 1, 1, 1)
 WHITE_DIM = (1, 1, 1, 0.85)
 BG = (0.96, 0.96, 0.96, 1)
-
-
-def _monday_of(d: date) -> date:
-    """Return the Monday of the week containing ``d``."""
-    return d - timedelta(days=d.weekday())
 
 
 class GoalCard(MDCard):
@@ -145,7 +141,7 @@ class GoalsScreen(MDScreen):
         """Initialise state and build the UI."""
         super().__init__(**kwargs)
         self._dialog = None
-        self._current_week_start = _monday_of(date.today())
+        self._current_week_start = monday_of(date.today())
         self._editing_card = None
         self.build_ui()
 
@@ -201,7 +197,7 @@ class GoalsScreen(MDScreen):
             icon="chevron-left",
             theme_icon_color="Custom",
             icon_color=WHITE,
-            on_release=lambda _: self._change_week(-1),
+            on_release=self._week_prev,
         )
         self.week_label = MDLabel(
             text=self._week_text(),
@@ -217,7 +213,7 @@ class GoalsScreen(MDScreen):
             icon="chevron-right",
             theme_icon_color="Custom",
             icon_color=WHITE,
-            on_release=lambda _: self._change_week(1),
+            on_release=self._week_next,
         )
         week_row.add_widget(self._prev_btn)
         week_row.add_widget(self.week_label)
@@ -285,18 +281,28 @@ class GoalsScreen(MDScreen):
         self._refresh_empty_state()
 
     def on_pre_enter(self):
-        """Reload goals from the API each time the screen is shown."""
+        """Reset to the current week and reload its goals each time the screen is shown.
+
+        Resetting avoids silently adding goals to a past/future week the user had
+        navigated to on a previous visit, and keeps "current week" correct if the
+        app has been open across a week boundary.
+        """
+        self._current_week_start = monday_of(date.today())
+        self.week_label.text = self._week_text()
         self.load_goals()
 
     def load_goals(self):
         """Fetch goals for the selected week from the API and populate the list."""
         self.status_label.text = "Loading..."
+        self._set_nav_enabled(False)
         week_start_str = self._current_week_start.isoformat()
 
         def _do():
             try:
                 goals = api_client.get_goals(week_start_str)
-                Clock.schedule_once(lambda dt: self._populate_goals(goals))
+                Clock.schedule_once(
+                    lambda dt: self._populate_goals(goals, week_start_str)
+                )
             except Exception as e:
                 msg = str(e)
                 Clock.schedule_once(lambda dt: self.show_error(msg))
@@ -305,21 +311,50 @@ class GoalsScreen(MDScreen):
 
     def _week_text(self) -> str:
         """Human-readable range for the selected week (e.g. 'Jul 14 – Jul 20, 2026')."""
-        end = self._current_week_start + timedelta(days=6)
-        s = self._current_week_start.strftime('%b %d').replace(' 0', ' ')
-        e = end.strftime('%b %d, %Y').replace(' 0', ' ')
-        return f"{s} – {e}"
+        return week_range_text(self._current_week_start)
+
+    def _set_nav_enabled(self, enabled: bool):
+        """Enable/disable the week arrows (disabled while a week is loading).
+
+        Serialising loads this way prevents overlapping fetches whose responses
+        could arrive out of order and render the wrong week's goals.
+        """
+        self._prev_btn.disabled = not enabled
+        self._next_btn.disabled = not enabled
 
     @debounce()
+    def _week_prev(self, *args):
+        """Go to the previous week. Debounced per-direction (see _week_next)."""
+        self._change_week(-1)
+
+    @debounce()
+    def _week_next(self, *args):
+        """Go to the next week.
+
+        Prev/next are separate debounced methods so a quick ◀ then ▶ isn't
+        collapsed into one — only genuine same-button double-fires are.
+        """
+        self._change_week(1)
+
     def _change_week(self, delta: int):
         """Move the selected week by ``delta`` weeks and reload its goals."""
         self._current_week_start += timedelta(weeks=delta)
         self.week_label.text = self._week_text()
         self.load_goals()
 
-    def _populate_goals(self, goals):
-        """Clear existing cards and render goals from API data."""
-        for card in [w for w in self.goals_list.children if isinstance(w, GoalCard)]:
+    def _populate_goals(self, goals, week_start_str=None):
+        """Clear existing cards and render goals from API data.
+
+        ``week_start_str`` is the week the fetch was issued for; if the user has
+        since navigated to a different week, this (now stale) response is dropped.
+        """
+        if (
+            week_start_str is not None
+            and week_start_str != self._current_week_start.isoformat()
+        ):
+            return
+        self._set_nav_enabled(True)
+        for card in self._goal_cards():
             self.goals_list.remove_widget(card)
         self.status_label.text = ""
         for goal in goals:
@@ -327,10 +362,19 @@ class GoalsScreen(MDScreen):
                 goal_text=goal.get("goal_text", ""),
                 goal_id=goal.get("id"),
                 completed=goal.get("completed", False),
+                refresh=False,
             )
+        # Refresh once for the whole batch rather than per card.
+        self._refresh_empty_state()
 
-    def _add_goal_card(self, goal_text: str, goal_id=None, completed: bool = False):
-        """Create a GoalCard and append it to the list."""
+    def _add_goal_card(
+        self, goal_text: str, goal_id=None, completed: bool = False, refresh: bool = True
+    ):
+        """Create a GoalCard and append it to the list.
+
+        ``refresh`` lets bulk callers skip the per-card empty-state refresh and
+        do it once at the end.
+        """
         card = GoalCard(
             goal_text=goal_text,
             goal_id=goal_id,
@@ -340,12 +384,16 @@ class GoalsScreen(MDScreen):
             completed=completed,
         )
         self.goals_list.add_widget(card)
-        self._refresh_empty_state()
+        if refresh:
+            self._refresh_empty_state()
+
+    def _goal_cards(self):
+        """The GoalCard widgets currently in the list."""
+        return [w for w in self.goals_list.children if isinstance(w, GoalCard)]
 
     def _refresh_empty_state(self):
         """Show empty label only when there are no goal cards."""
-        goal_cards = [w for w in self.goals_list.children if isinstance(w, GoalCard)]
-        self.empty_label.opacity = 0 if goal_cards else 1
+        self.empty_label.opacity = 0 if self._goal_cards() else 1
 
     def toggle_goal(self, card: "GoalCard", completed: bool):
         """Persist completed state to the API."""
@@ -383,8 +431,9 @@ class GoalsScreen(MDScreen):
         self._refresh_empty_state()
 
     def show_error(self, message: str):
-        """Display an error message in the status label."""
+        """Display an error message in the status label and re-enable navigation."""
         self.status_label.text = message
+        self._set_nav_enabled(True)
 
     def _open_goal_dialog(self, headline: str, initial: str, confirm_label: str, confirm_callback):
         """Open a goal text dialog shared by the add and edit flows."""
