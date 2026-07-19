@@ -210,8 +210,12 @@ class TestAPIClientAndroidCompat:
     def test_api_base_url_not_hardcoded_to_localhost_only(self):
         """Warn if URL is still localhost — it won't work on a physical device."""
         source = self._read_client()
-        # Extract the actual value on the API_BASE_URL assignment line
-        match = re.search(r'API_BASE_URL\s*=\s*["\']([^"\']+)["\']', source)
+        # Extract the value on the API_BASE_URL assignment line. It may be a
+        # plain string or an os.getenv(...) call whose default is a string.
+        match = re.search(
+            r'API_BASE_URL\s*=\s*(?:os\.getenv\([^,]+,\s*)?["\']([^"\']+)["\']',
+            source,
+        )
         assert match, "Could not parse API_BASE_URL value"
         url = match.group(1)
         # It's fine for localhost during desktop dev, but flag it as a reminder

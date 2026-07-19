@@ -22,8 +22,10 @@ TOKEN_FILE = os.path.join(_token_dir, ".coach_assistant_token.json")
 class APIClient:
     """Handles all API communication with the backend"""
 
-    # For phone testing: change to your laptop's local IP, e.g. http://192.168.1.x:8000/api
-    API_BASE_URL = "http://localhost:8000/api"
+    # Defaults to localhost for desktop dev. To test against a backend on
+    # another machine (e.g. from a phone or a second laptop), set COACH_API_URL
+    # to that machine's LAN address, e.g. http://192.168.1.53:8000/api
+    API_BASE_URL = os.getenv("COACH_API_URL", "http://localhost:8000/api")
 
     REQUEST_TIMEOUT = 15  # seconds
 
