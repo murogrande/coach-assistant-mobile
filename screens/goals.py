@@ -305,9 +305,14 @@ class GoalsScreen(MDScreen):
                 )
             except Exception as e:
                 msg = str(e)
-                Clock.schedule_once(lambda dt: self.show_error(msg))
+                Clock.schedule_once(lambda dt: self._on_load_error(msg))
 
         threading.Thread(target=_do, daemon=True).start()
+
+    def _on_load_error(self, message: str):
+        """Handle a failed week load: re-enable navigation, then show the error."""
+        self._set_nav_enabled(True)
+        self.show_error(message)
 
     def _week_text(self) -> str:
         """Human-readable range for the selected week (e.g. 'Jul 14 – Jul 20, 2026')."""
@@ -431,9 +436,13 @@ class GoalsScreen(MDScreen):
         self._refresh_empty_state()
 
     def show_error(self, message: str):
-        """Display an error message in the status label and re-enable navigation."""
+        """Display an error message in the status label.
+
+        Does not touch week navigation: a failing goal action (toggle/delete/
+        edit/create) must not re-enable the arrows while a week load still has
+        them disabled. The load-error path handles that via _on_load_error.
+        """
         self.status_label.text = message
-        self._set_nav_enabled(True)
 
     def _open_goal_dialog(self, headline: str, initial: str, confirm_label: str, confirm_callback):
         """Open a goal text dialog shared by the add and edit flows."""
@@ -495,12 +504,24 @@ class GoalsScreen(MDScreen):
             try:
                 result = api_client.create_goal(text, week_start_date=week_start_str)
                 goal_id = result.get("id")
-                Clock.schedule_once(lambda dt: self._add_goal_card(text, goal_id=goal_id))
+                Clock.schedule_once(
+                    lambda dt: self._add_created_goal(text, goal_id, week_start_str)
+                )
             except Exception as e:
                 msg = str(e)
                 Clock.schedule_once(lambda dt: self.show_error(msg))
 
         threading.Thread(target=_do, daemon=True).start()
+
+    def _add_created_goal(self, text: str, goal_id, week_start_str: str):
+        """Render a newly created goal, but only if its week is still on screen.
+
+        If the user navigated to another week while the create was in flight,
+        the card would otherwise be appended under the wrong week's list.
+        """
+        if week_start_str != self._current_week_start.isoformat():
+            return
+        self._add_goal_card(text, goal_id=goal_id)
 
     @debounce()
     def confirm_edit_goal(self, *args):

@@ -612,6 +612,33 @@ class TestGoalsScreen:
         screen.show_error("Network error")
         assert screen.status_label.text == "Network error"
 
+    def test_on_load_error_reenables_nav(self, screen_manager):
+        """A failed week load re-enables the arrows and shows the message."""
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._set_nav_enabled(False)  # load in flight
+
+        screen._on_load_error("boom")
+
+        assert screen._prev_btn.disabled is False
+        assert screen._next_btn.disabled is False
+        assert screen.status_label.text == "boom"
+
+    def test_show_error_leaves_nav_disabled_during_load(self, screen_manager):
+        """A non-load action error must not re-enable arrows while a load runs."""
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._set_nav_enabled(False)  # a week load is in flight
+
+        screen.show_error("toggle failed")
+
+        assert screen._prev_btn.disabled is True
+        assert screen._next_btn.disabled is True
+
     def test_confirm_add_goal_uses_selected_week(self, screen_manager):
         """confirm_add_goal creates the goal for the currently selected week."""
         from datetime import date
@@ -636,6 +663,36 @@ class TestGoalsScreen:
         mock_create.assert_called_once_with(
             "Plan the week", week_start_date="2026-07-13"
         )
+
+    def test_add_created_goal_skips_if_week_changed(self, screen_manager):
+        """A create that resolves after navigating away isn't rendered on the new week."""
+        from datetime import date
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._current_week_start = date(2026, 7, 20)  # user has moved to another week
+        before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+
+        # Goal was created for the previously selected week.
+        screen._add_created_goal("Stale goal", 1, "2026-07-13")
+
+        after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        assert len(after) == len(before)
+
+    def test_add_created_goal_renders_if_week_matches(self, screen_manager):
+        """A create that resolves while its week is still shown renders the card."""
+        from datetime import date
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._current_week_start = date(2026, 7, 13)
+
+        screen._add_created_goal("Fresh goal", 1, "2026-07-13")
+
+        cards = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        assert any(c.goal_text == "Fresh goal" for c in cards)
 
     def test_change_week_reloads_goals(self, screen_manager):
         """_change_week shifts the week by 7 days and reloads."""
