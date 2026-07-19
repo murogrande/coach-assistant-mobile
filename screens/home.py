@@ -13,6 +13,7 @@ from kivymd.uix.card import MDCard
 from kivymd.icon_definitions import md_icons
 
 from services.api_client import api_client
+from utils.debounce import debounce
 
 
 BLUE = (0.129, 0.588, 0.953, 1)
@@ -54,23 +55,25 @@ class StatCard(MDCard):
             style="elevated",
             **kwargs,
         )
-        top_row = MDBoxLayout(orientation="horizontal", spacing=8, adaptive_height=True)
+        top_row = MDBoxLayout(orientation="horizontal", spacing=8, size_hint=(1, 0.55))
         top_row.add_widget(MDLabel(
             text=md_icons.get(icon, ""),
             font_style="Icon",
             font_size="20sp",
-            size_hint=(None, None),
-            size=(24, 24),
+            size_hint=(None, 1),
+            width=24,
             theme_text_color="Custom",
             text_color=BLUE,
+            valign="center",
         ))
         self.value_label = MDLabel(
             text=value,
             font_style="Title",
             role="large",
-            adaptive_height=True,
+            size_hint=(1, 1),
             theme_text_color="Custom",
             text_color=BLUE,
+            valign="center",
         )
         top_row.add_widget(self.value_label)
         self.add_widget(top_row)
@@ -79,7 +82,9 @@ class StatCard(MDCard):
             font_style="Body",
             role="small",
             theme_text_color="Secondary",
-            adaptive_height=True,
+            size_hint=(1, 0.45),
+            valign="top",
+            halign="left",
         ))
 
 
@@ -100,7 +105,7 @@ class NavCard(MDCard):
             padding=[20, 18, 20, 18],
             spacing=20,
             size_hint=(1, None),
-            height=88,
+            height=130,
             elevation=1,
             style="elevated",
             ripple_behavior=True,
@@ -119,19 +124,27 @@ class NavCard(MDCard):
             text_color=BLUE,
         ))
 
-        text_col = MDBoxLayout(orientation="vertical", spacing=2)
+        text_col = MDBoxLayout(
+            orientation="vertical",
+            size_hint=(1, 1),
+            padding=[0, 10, 0, 10],
+        )
         text_col.add_widget(MDLabel(
             text=title,
             font_style="Title",
             role="medium",
-            adaptive_height=True,
+            size_hint_y=0.55,
+            valign="bottom",
+            halign="left",
         ))
         text_col.add_widget(MDLabel(
             text=subtitle,
             font_style="Body",
             role="small",
             theme_text_color="Secondary",
-            adaptive_height=True,
+            size_hint_y=0.45,
+            valign="top",
+            halign="left",
         ))
         self.add_widget(text_col)
 
@@ -176,7 +189,7 @@ class HomeScreen(MDScreen):
         )
 
         top_row = MDBoxLayout(orientation="horizontal", adaptive_height=True)
-        title_col = MDBoxLayout(orientation="vertical", spacing=4)
+        title_col = MDBoxLayout(orientation="vertical", spacing=4, size_hint_x=1, adaptive_height=True)
         self.greeting_label = MDLabel(
             text=f"{_greeting()}!",
             font_style="Display",
@@ -214,7 +227,7 @@ class HomeScreen(MDScreen):
         inner = MDBoxLayout(
             orientation="vertical",
             padding=[16, 16, 16, 16],
-            spacing=14,
+            spacing=18,
             adaptive_height=True,
         )
 
@@ -252,7 +265,7 @@ class HomeScreen(MDScreen):
         ))
 
         # Logout
-        logout_row = MDBoxLayout(size_hint=(1, None), height=56, padding=[0, 8, 0, 0])
+        logout_row = MDBoxLayout(size_hint=(1, None), height=80, padding=[0, 40, 0, 0])
         logout_btn = MDButton(
             style="text",
             theme_width="Custom",
@@ -275,6 +288,7 @@ class HomeScreen(MDScreen):
         self.username_label.text = f"Welcome back, {name}" if name else "What would you like to do today?"
         self.load_stats()
 
+    @debounce()
     def load_stats(self):
         """Load goal and journal counts from API in background thread"""
         def _fetch():
@@ -304,6 +318,7 @@ class HomeScreen(MDScreen):
         """Navigate to the given screen by name."""
         self.manager.current = screen_name
 
+    @debounce()
     def do_logout(self, *args):
         """Clear the auth token and return to the login screen."""
         api_client.logout()

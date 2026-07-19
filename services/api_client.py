@@ -4,6 +4,7 @@ API Client for communicating with Django backend
 
 import os
 import json
+import threading
 from datetime import date, timedelta
 import requests
 from typing import Optional, Dict, List
@@ -22,11 +23,19 @@ class APIClient:
     # For phone testing: change to your laptop's local IP, e.g. http://192.168.1.x:8000/api
     API_BASE_URL = "http://localhost:8000/api"
 
+    REQUEST_TIMEOUT = 15  # seconds
+
     def __init__(self):
         """Initialise the client with empty auth state."""
         self.token: Optional[str] = None
+        self.refresh_token: Optional[str] = None
         self.username: Optional[str] = None
         self.headers = {"Content-Type": "application/json"}
+        # Serialises token refreshes: API calls run on background threads, so
+        # several can hit a 401 at once. Without this they would each fire a
+        # refresh, and if the backend ever rotates refresh tokens the extra
+        # calls would invalidate each other's tokens.
+        self._refresh_lock = threading.Lock()
 
     def _update_auth_header(self):
         """Update authorization header with current token"""
@@ -47,13 +56,14 @@ class APIClient:
         url = f"{self.API_BASE_URL}/auth/login/"
         data = {"username": username, "password": password}
 
-        response = requests.post(url, json=data)
+        response = requests.post(url, json=data, timeout=self.REQUEST_TIMEOUT)
         response.raise_for_status()
 
         result = response.json()
         # Backend returns tokens.access (JWT) or token (simple)
         tokens_obj = result.get("tokens", {})
         self.token = tokens_obj.get("access") or result.get("token")
+        self.refresh_token = tokens_obj.get("refresh")
         self.username = result.get("user", {}).get("username") or username
         self._update_auth_header()
         self.save_token()
@@ -75,24 +85,32 @@ class APIClient:
         url = f"{self.API_BASE_URL}/auth/register/"
         data = {"username": username, "password": password, "email": email}
 
-        response = requests.post(url, json=data)
+        response = requests.post(url, json=data, timeout=self.REQUEST_TIMEOUT)
         response.raise_for_status()
 
         return response.json()
 
     def save_token(self):
-        """Persist the current access token and username to disk"""
+        """Persist the current access and refresh tokens to disk"""
         if self.token:
             with open(TOKEN_FILE, "w") as f:
-                json.dump({"access_token": self.token, "username": self.username}, f)
+                json.dump(
+                    {
+                        "access_token": self.token,
+                        "refresh_token": self.refresh_token,
+                        "username": self.username,
+                    },
+                    f,
+                )
 
     def load_token(self) -> Optional[str]:
-        """Load persisted token and username from disk"""
+        """Load persisted tokens and username from disk"""
         if os.path.exists(TOKEN_FILE):
             try:
                 with open(TOKEN_FILE) as f:
                     data = json.load(f)
                 self.token = data.get("access_token")
+                self.refresh_token = data.get("refresh_token")
                 self.username = data.get("username")
                 if self.token:
                     self._update_auth_header()
@@ -102,12 +120,70 @@ class APIClient:
         return None
 
     def logout(self):
-        """Clear token and username from memory and disk"""
+        """Clear tokens and username from memory and disk"""
         self.token = None
+        self.refresh_token = None
         self.username = None
         self.headers.pop("Authorization", None)
         if os.path.exists(TOKEN_FILE):
             os.remove(TOKEN_FILE)
+
+    def _refresh_access_token(self) -> bool:
+        """Use the refresh token to obtain a new access token. Returns True on success.
+
+        If the server rejects the refresh token (401 — it has expired or been
+        revoked), the stored session is cleared so the app falls back to the
+        login screen instead of looping on 401s with a dead token. Network/
+        connection errors leave the token intact so a later retry can succeed.
+
+        The refresh is serialised: concurrent callers that block on the lock
+        re-check whether another thread already refreshed and reuse its result
+        instead of firing a second refresh.
+        """
+        if not self.refresh_token:
+            return False
+        # Token in use when our request failed; if it changes while we wait for
+        # the lock, another thread already refreshed and we can reuse it.
+        stale_token = self.token
+        with self._refresh_lock:
+            if self.token != stale_token:
+                return True
+            url = f"{self.API_BASE_URL}/auth/token/refresh/"
+            try:
+                response = requests.post(
+                    url,
+                    json={"refresh": self.refresh_token},
+                    timeout=self.REQUEST_TIMEOUT,
+                )
+            except Exception:
+                return False
+            if response.status_code == 200:
+                self.token = response.json().get("access")
+                if self.token:
+                    self._update_auth_header()
+                    self.save_token()
+                    return True
+            elif response.status_code == 401:
+                self.logout()
+            return False
+
+    def _request(
+        self, method: str, url: str, allow_statuses: tuple = (), **kwargs
+    ) -> requests.Response:
+        """Make an HTTP request with timeout, retrying once after a token refresh on 401.
+
+        Statuses listed in ``allow_statuses`` (e.g. 404) are returned to the
+        caller without raising, so endpoints can map them to None/[] themselves.
+        """
+        kwargs.setdefault("headers", self.headers)
+        kwargs.setdefault("timeout", self.REQUEST_TIMEOUT)
+        response = getattr(requests, method)(url, **kwargs)
+        if response.status_code == 401 and self._refresh_access_token():
+            kwargs["headers"] = self.headers
+            response = getattr(requests, method)(url, **kwargs)
+        if response.status_code not in allow_statuses:
+            response.raise_for_status()
+        return response
 
     def is_authenticated(self) -> bool:
         """Return True if a token is currently set"""
@@ -116,113 +192,96 @@ class APIClient:
     # Goals endpoints
     def get_goals(self) -> List[Dict]:
         """Get all goals for current week"""
-        url = f"{self.API_BASE_URL}/goals/"
-        response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
-        return response.json()
+        return self._request("get", f"{self.API_BASE_URL}/goals/").json()
 
     def create_goal(self, goal_text: str, category: str = "personal") -> Dict:
         """Create new weekly goal for the current week."""
-        url = f"{self.API_BASE_URL}/goals/"
         today = date.today()
-        week_start = today - timedelta(days=today.weekday())  # Monday
+        week_start = today - timedelta(days=today.weekday())
         data = {
             "goal_text": goal_text,
             "category": category,
             "week_start_date": week_start.isoformat(),
         }
-        response = requests.post(url, json=data, headers=self.headers)
-        response.raise_for_status()
-        return response.json()
+        return self._request("post", f"{self.API_BASE_URL}/goals/", json=data).json()
 
     def update_goal(
-        self, goal_id: int, completed: Optional[bool] = None, goal_text: Optional[str] = None
+        self,
+        goal_id: int,
+        completed: Optional[bool] = None,
+        goal_text: Optional[str] = None,
     ) -> Dict:
         """Update goal status or text"""
-        url = f"{self.API_BASE_URL}/goals/{goal_id}/"
         data = {}
         if completed is not None:
             data["completed"] = completed
         if goal_text is not None:
             data["goal_text"] = goal_text
-
-        response = requests.put(url, json=data, headers=self.headers)
-        response.raise_for_status()
-        return response.json()
+        return self._request(
+            "patch", f"{self.API_BASE_URL}/goals/{goal_id}/", json=data
+        ).json()
 
     def delete_goal(self, goal_id: int) -> None:
         """Delete a goal by ID"""
-        url = f"{self.API_BASE_URL}/goals/{goal_id}/"
-        response = requests.delete(url, headers=self.headers)
-        response.raise_for_status()
+        self._request("delete", f"{self.API_BASE_URL}/goals/{goal_id}/")
 
     # Journal endpoints
     def get_journal_entries(self) -> List[Dict]:
         """Get all journal entries"""
-        url = f"{self.API_BASE_URL}/journal/"
-        response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
-        return response.json()
+        return self._request("get", f"{self.API_BASE_URL}/journal/").json()
 
     def get_journal_by_date(self, date_str: str) -> Optional[Dict]:
         """Get journal entry for specific date (YYYY-MM-DD)"""
         url = f"{self.API_BASE_URL}/journal/by-date/{date_str}/"
-        response = requests.get(url, headers=self.headers)
+        response = self._request("get", url, allow_statuses=(404,))
         if response.status_code == 404:
             return None
-        response.raise_for_status()
         return response.json()
 
     def create_journal_entry(
         self, date_str: str, content: str, language: str = "en"
     ) -> Dict:
         """Create new journal entry"""
-        url = f"{self.API_BASE_URL}/journal/"
         data = {"date": date_str, "content": content, "language": language}
-        response = requests.post(url, json=data, headers=self.headers)
-        response.raise_for_status()
-        return response.json()
+        return self._request("post", f"{self.API_BASE_URL}/journal/", json=data).json()
 
     def update_journal_entry(self, entry_id: int, content: str) -> Dict:
         """Update existing journal entry by ID"""
-        url = f"{self.API_BASE_URL}/journal/{entry_id}/"
-        data = {"content": content}
-        response = requests.patch(url, json=data, headers=self.headers)
-        response.raise_for_status()
-        return response.json()
+        return self._request(
+            "patch",
+            f"{self.API_BASE_URL}/journal/{entry_id}/",
+            json={"content": content},
+        ).json()
 
     # Analysis endpoints
     def generate_analysis(self, week_start_date: str) -> Dict:
         """Request weekly analysis generation"""
-        url = f"{self.API_BASE_URL}/analysis/generate/"
-        data = {"week_start_date": week_start_date}
-        response = requests.post(url, json=data, headers=self.headers)
-        response.raise_for_status()
-        return response.json()
+        return self._request(
+            "post",
+            f"{self.API_BASE_URL}/analysis/generate/",
+            json={"week_start_date": week_start_date},
+            timeout=120,  # generation can take up to 30-60s
+        ).json()
 
     def get_latest_analysis(self) -> Optional[Dict]:
         """Get most recent weekly analysis"""
         url = f"{self.API_BASE_URL}/analysis/latest/"
-        response = requests.get(url, headers=self.headers)
+        response = self._request("get", url, allow_statuses=(404,))
         if response.status_code == 404:
             return None
-        response.raise_for_status()
         return response.json()
 
     def get_analysis_list(self) -> List[Dict]:
         """Get all weekly analyses for the current user"""
         url = f"{self.API_BASE_URL}/analysis/"
-        response = requests.get(url, headers=self.headers)
+        response = self._request("get", url, allow_statuses=(404,))
         if response.status_code == 404:
             return []
-        response.raise_for_status()
         return response.json()
 
     def delete_analysis(self, analysis_id: int) -> None:
         """Delete an analysis by ID"""
-        url = f"{self.API_BASE_URL}/analysis/{analysis_id}/"
-        response = requests.delete(url, headers=self.headers)
-        response.raise_for_status()
+        self._request("delete", f"{self.API_BASE_URL}/analysis/{analysis_id}/")
 
 
 # Singleton instance

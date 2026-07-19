@@ -19,6 +19,7 @@ from kivymd.uix.dialog import (
 from kivymd.uix.textfield import MDTextField
 
 from services.api_client import api_client
+from utils.debounce import debounce
 
 
 BLUE = (0.129, 0.588, 0.953, 1)
@@ -80,9 +81,14 @@ class GoalCard(MDCard):
             size_hint=(None, None),
             size=(40, 40),
             pos_hint={"center_y": 0.5},
-            on_release=lambda x: self._on_delete(self),
+            on_release=self._handle_delete,
         )
         self.add_widget(self.delete_btn)
+
+    @debounce()
+    def _handle_delete(self, *args):
+        """Invoke the delete callback, debounced against Android's double on_release."""
+        self._on_delete(self)
 
     def on_touch_down(self, touch):
         """Toggle checkbox when the card body is tapped (excluding the delete button)."""
@@ -292,6 +298,7 @@ class GoalsScreen(MDScreen):
         """Display an error message in the status label."""
         self.status_label.text = message
 
+    @debounce()
     def show_add_dialog(self):
         """Open the dialog for entering a new goal."""
         self.new_goal_field = MDTextField(
@@ -326,6 +333,7 @@ class GoalsScreen(MDScreen):
             self._dialog.dismiss()
             self._dialog = None
 
+    @debounce()
     def confirm_add_goal(self, *args):
         """Read the dialog input, close it, and create the goal via API."""
         text = self.new_goal_field.text.strip()
@@ -344,6 +352,7 @@ class GoalsScreen(MDScreen):
 
         threading.Thread(target=_do, daemon=True).start()
 
+    @debounce()
     def go_back(self):
         """Navigate back to the home screen."""
         self.manager.current = "home"

@@ -90,6 +90,32 @@ class TestAPIClient:
         call_args = mock_post.call_args
         assert "register" in call_args[0][0]
 
+    @patch("services.api_client.requests.post")
+    def test_login_uses_timeout(self, mock_post):
+        """login() must pass a timeout so a hung connection can't freeze the auth thread."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"token": "abc123", "user": {"id": 1}}
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        client = APIClient()
+        with patch("builtins.open", MagicMock()), patch("services.api_client.json.dump"):
+            client.login("testuser", "password")
+
+        assert mock_post.call_args.kwargs["timeout"] == APIClient.REQUEST_TIMEOUT
+
+    @patch("services.api_client.requests.post")
+    def test_register_uses_timeout(self, mock_post):
+        """register() must pass a timeout so a hung connection can't freeze the auth thread."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"id": 1, "username": "newuser"}
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        APIClient().register("newuser", "password", "email@test.com")
+
+        assert mock_post.call_args.kwargs["timeout"] == APIClient.REQUEST_TIMEOUT
+
     def test_is_authenticated_false_without_token(self):
         """Test is_authenticated returns False when no token"""
         client = APIClient()
@@ -175,6 +201,21 @@ class TestAPIClient:
         expected_monday = (today - timedelta(days=today.weekday())).isoformat()
         assert payload["week_start_date"] == expected_monday
 
+    @patch("services.api_client.requests.patch")
+    def test_update_goal_uses_patch(self, mock_patch):
+        """update_goal must use PATCH (not PUT) — PUT returns 400 Bad Request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"id": 7, "completed": True}
+        mock_response.raise_for_status = MagicMock()
+        mock_patch.return_value = mock_response
+
+        client = APIClient()
+        client.update_goal(7, completed=True)
+
+        mock_patch.assert_called_once()
+        assert "goals/7/" in mock_patch.call_args[0][0]
+        assert mock_patch.call_args[1]["json"]["completed"] is True
+
     @patch("services.api_client.requests.delete")
     def test_delete_goal(self, mock_delete):
         """Test delete_goal sends DELETE request"""
@@ -241,3 +282,190 @@ class TestAPIClient:
         result = client.get_latest_analysis()
 
         assert result is None
+
+
+class TestTokenRefresh:
+    """Tests for automatic JWT token refresh on 401.
+
+    Root cause: access tokens expire after 5 minutes (Django SimpleJWT default).
+    The app was not saving or using the refresh token, so every request would fail
+    silently with 401 after 5 minutes. Fix: save refresh token at login, and retry
+    any 401 response once after refreshing the access token.
+    """
+
+    def test_login_saves_refresh_token(self):
+        """login() must store the refresh token from tokens.refresh."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "tokens": {"access": "access-tok", "refresh": "refresh-tok"},
+            "user": {"username": "u"},
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        client = APIClient()
+        with patch("services.api_client.requests.post", return_value=mock_response), \
+             patch("services.api_client.open", create=True), \
+             patch("services.api_client.json.dump"):
+            client.login("u", "p")
+
+        assert client.refresh_token == "refresh-tok"
+
+    def test_save_and_load_refresh_token(self, tmp_path, monkeypatch):
+        """Refresh token must survive a save/load round-trip."""
+        token_file = tmp_path / "token.json"
+        monkeypatch.setattr("services.api_client.TOKEN_FILE", str(token_file))
+
+        client = APIClient()
+        client.token = "access-tok"
+        client.refresh_token = "refresh-tok"
+        client.username = "u"
+        client.save_token()
+
+        client2 = APIClient()
+        monkeypatch.setattr("services.api_client.TOKEN_FILE", str(token_file))
+        client2.load_token()
+
+        assert client2.refresh_token == "refresh-tok"
+
+    @patch("services.api_client.requests.post")
+    def test_refresh_access_token_success(self, mock_post):
+        """_refresh_access_token() updates the access token and returns True."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"access": "new-access-tok"}
+        mock_post.return_value = mock_response
+
+        client = APIClient()
+        client.refresh_token = "refresh-tok"
+
+        with patch.object(client, "save_token"):
+            result = client._refresh_access_token()
+
+        assert result is True
+        assert client.token == "new-access-tok"
+        assert client.headers["Authorization"] == "Bearer new-access-tok"
+
+    def test_refresh_access_token_no_refresh_token(self):
+        """_refresh_access_token() returns False when no refresh token is stored."""
+        client = APIClient()
+        client.refresh_token = None
+
+        assert client._refresh_access_token() is False
+
+    @patch("services.api_client.requests.post", side_effect=Exception("network error"))
+    def test_refresh_access_token_network_failure(self, _):
+        """_refresh_access_token() returns False on network error, keeping the token."""
+        client = APIClient()
+        client.token = "old-access-tok"
+        client.refresh_token = "refresh-tok"
+
+        assert client._refresh_access_token() is False
+        # Network error must NOT wipe the session — a later retry may succeed.
+        assert client.token == "old-access-tok"
+        assert client.refresh_token == "refresh-tok"
+
+    @patch("services.api_client.requests.post")
+    def test_refresh_access_token_expired_clears_session(self, mock_post):
+        """A 401 from the refresh endpoint (expired/revoked) clears the session."""
+        rejected = MagicMock()
+        rejected.status_code = 401
+        mock_post.return_value = rejected
+
+        client = APIClient()
+        client.token = "dead-access-tok"
+        client.refresh_token = "expired-refresh-tok"
+        client._update_auth_header()
+
+        with patch.object(client, "logout", wraps=client.logout) as mock_logout:
+            result = client._refresh_access_token()
+
+        assert result is False
+        mock_logout.assert_called_once()
+        assert client.token is None
+        assert client.refresh_token is None
+        assert "Authorization" not in client.headers
+
+    @patch("services.api_client.requests.post")
+    def test_refresh_access_token_skips_when_already_refreshed(self, mock_post):
+        """If another thread refreshed the access token while we waited for the
+        lock, reuse it instead of firing a redundant (rotation-unsafe) refresh."""
+        client = APIClient()
+        client.token = "stale-tok"
+        client.refresh_token = "refresh-tok"
+
+        # Simulate a concurrent refresh completing while we block on the lock:
+        # entering the lock swaps in a freshly-refreshed access token, so the
+        # in-lock re-check sees token != stale_token and returns early.
+        class FakeLock:
+            def __enter__(self):
+                client.token = "concurrently-refreshed-tok"
+
+            def __exit__(self, *exc):
+                return False
+
+        client._refresh_lock = FakeLock()
+
+        result = client._refresh_access_token()
+
+        assert result is True
+        mock_post.assert_not_called()
+
+    @patch("services.api_client.requests.get")
+    def test_request_retries_after_401_and_succeeds(self, mock_get):
+        """_request() retries once with a new token when the first response is 401."""
+        expired_response = MagicMock()
+        expired_response.status_code = 401
+
+        ok_response = MagicMock()
+        ok_response.status_code = 200
+        ok_response.json.return_value = {"id": 1}
+
+        mock_get.side_effect = [expired_response, ok_response]
+
+        client = APIClient()
+        client.refresh_token = "refresh-tok"
+
+        with patch.object(client, "_refresh_access_token", return_value=True):
+            response = client._request("get", "http://test/api/goals/")
+
+        assert mock_get.call_count == 2
+        assert response.status_code == 200
+
+    @patch("services.api_client.requests.get")
+    def test_request_raises_401_when_refresh_fails(self, mock_get):
+        """_request() raises HTTPError when 401 persists after a failed refresh."""
+        import requests as req
+
+        expired_response = MagicMock()
+        expired_response.status_code = 401
+        expired_response.raise_for_status.side_effect = req.HTTPError("401")
+        mock_get.return_value = expired_response
+
+        client = APIClient()
+        with patch.object(client, "_refresh_access_token", return_value=False):
+            try:
+                client._request("get", "http://test/api/goals/")
+                assert False, "Expected HTTPError"
+            except req.HTTPError:
+                pass
+
+    @patch("services.api_client.requests.get")
+    def test_get_goals_auto_refreshes_on_401(self, mock_get):
+        """get_goals() transparently refreshes the token and retries on 401."""
+        expired = MagicMock()
+        expired.status_code = 401
+
+        ok = MagicMock()
+        ok.status_code = 200
+        ok.json.return_value = [{"id": 1, "goal_text": "Run"}]
+
+        mock_get.side_effect = [expired, ok]
+
+        client = APIClient()
+        client.refresh_token = "refresh-tok"
+
+        with patch.object(client, "_refresh_access_token", return_value=True):
+            result = client.get_goals()
+
+        assert result == [{"id": 1, "goal_text": "Run"}]
+        assert mock_get.call_count == 2

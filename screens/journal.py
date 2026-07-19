@@ -18,6 +18,7 @@ from kivymd.uix.dialog import (
 from kivy.uix.textinput import TextInput
 
 from services.api_client import api_client
+from utils.debounce import debounce
 
 
 BLUE = (0.129, 0.588, 0.953, 1)
@@ -182,6 +183,7 @@ class JournalScreen(MDScreen):
         """Load the journal entry for the current date each time the screen is shown."""
         self.load_entry(self.current_date)
 
+    @debounce()
     def navigate_date(self, delta):
         """Navigate to the previous (-1) or next (+1) day, prompting if unsaved changes exist."""
         if self._has_unsaved_changes():
@@ -230,6 +232,7 @@ class JournalScreen(MDScreen):
         self._entry_id = entry_id
         self.status_label.text = ""
 
+    @debounce()
     def save_entry(self, *args):
         """Save the current journal entry via the API (Issue #8)."""
         content = self.journal_field.text.strip()
@@ -271,6 +274,7 @@ class JournalScreen(MDScreen):
         self.save_btn_text.text = "Save Entry"
         self.status_label.text = "Could not save. Please try again."
 
+    @debounce()
     def go_back(self):
         """Navigate back to home, showing a discard dialog if there are unsaved changes."""
         if self._has_unsaved_changes():
