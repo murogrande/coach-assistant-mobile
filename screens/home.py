@@ -295,7 +295,11 @@ class HomeScreen(MDScreen):
             goals_value = "—"
             journal_value = "—"
             try:
-                goals = api_client.get_goals()
+                today = datetime.date.today()
+                week_start = (
+                    today - datetime.timedelta(days=today.weekday())
+                ).isoformat()
+                goals = api_client.get_goals(week_start)
                 completed = sum(1 for g in goals if g.get("completed"))
                 goals_value = f"{completed}/{len(goals)}"
             except Exception:

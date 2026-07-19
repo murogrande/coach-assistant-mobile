@@ -490,7 +490,7 @@ class TestGoalsScreen:
         screen_manager.add_widget(screen)
 
         cards_before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
-        screen.new_goal_field = MDTextField(text="   ")
+        screen._goal_field = MDTextField(text="   ")
         screen._dialog = MagicMock()
 
         with patch("screens.goals.threading.Thread") as mock_thread:
@@ -508,7 +508,7 @@ class TestGoalsScreen:
         screen = GoalsScreen(name="goals")
         screen_manager.add_widget(screen)
 
-        screen.new_goal_field = MDTextField(text="Walk 10k steps")
+        screen._goal_field = MDTextField(text="Walk 10k steps")
         screen._dialog = MagicMock()
 
         with patch("screens.goals.threading.Thread") as mock_thread:
@@ -611,6 +611,108 @@ class TestGoalsScreen:
 
         screen.show_error("Network error")
         assert screen.status_label.text == "Network error"
+
+    def test_confirm_add_goal_uses_selected_week(self, screen_manager):
+        """confirm_add_goal creates the goal for the currently selected week."""
+        from datetime import date
+        from screens.goals import GoalsScreen
+        from kivymd.uix.textfield import MDTextField
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._current_week_start = date(2026, 7, 13)  # a Monday
+        screen._goal_field = MDTextField(text="Plan the week")
+        screen._dialog = MagicMock()
+
+        with patch("services.api_client.api_client.create_goal") as mock_create, \
+             patch("screens.goals.threading.Thread") as mock_thread:
+            # Run the worker synchronously so we can assert the API call.
+            mock_thread.side_effect = lambda target, daemon=None: MagicMock(
+                start=target
+            )
+            mock_create.return_value = {"id": 99}
+            screen.confirm_add_goal()
+
+        mock_create.assert_called_once_with(
+            "Plan the week", week_start_date="2026-07-13"
+        )
+
+    def test_change_week_reloads_goals(self, screen_manager):
+        """_change_week shifts the week by 7 days and reloads."""
+        from datetime import date
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._current_week_start = date(2026, 7, 13)
+
+        with patch.object(screen, "load_goals") as mock_load:
+            screen._change_week(1)
+            assert screen._current_week_start == date(2026, 7, 20)
+            mock_load.assert_called_once()
+
+    def test_edit_goal_persists_new_text(self, screen_manager):
+        """confirm_edit_goal PATCHes goal_text and updates the card label."""
+        from screens.goals import GoalsScreen, GoalCard
+        from kivymd.uix.textfield import MDTextField
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._add_goal_card("Old text", goal_id=5)
+        card = next(w for w in screen.goals_list.children if isinstance(w, GoalCard))
+
+        screen._editing_card = card
+        screen._goal_field = MDTextField(text="New text")
+        screen._dialog = MagicMock()
+
+        with patch("services.api_client.api_client.update_goal") as mock_update, \
+             patch("screens.goals.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)), \
+             patch("screens.goals.threading.Thread") as mock_thread:
+            mock_thread.side_effect = lambda target, daemon=None: MagicMock(
+                start=target
+            )
+            screen.confirm_edit_goal()
+
+        mock_update.assert_called_once_with(5, goal_text="New text")
+        assert card.goal_text == "New text"
+
+    def test_edit_goal_ignores_unchanged_text(self, screen_manager):
+        """confirm_edit_goal does nothing when the text is unchanged."""
+        from screens.goals import GoalsScreen, GoalCard
+        from kivymd.uix.textfield import MDTextField
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._add_goal_card("Same text", goal_id=5)
+        card = next(w for w in screen.goals_list.children if isinstance(w, GoalCard))
+
+        screen._editing_card = card
+        screen._goal_field = MDTextField(text="Same text")
+        screen._dialog = MagicMock()
+
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            screen.confirm_edit_goal()
+            mock_thread.assert_not_called()
+
+    def test_edit_goal_local_card_updates_without_api(self, screen_manager):
+        """Editing a not-yet-persisted card updates text without an API call."""
+        from screens.goals import GoalsScreen, GoalCard
+        from kivymd.uix.textfield import MDTextField
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._add_goal_card("Local")  # no goal_id
+        card = next(w for w in screen.goals_list.children if isinstance(w, GoalCard))
+
+        screen._editing_card = card
+        screen._goal_field = MDTextField(text="Local edited")
+        screen._dialog = MagicMock()
+
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            screen.confirm_edit_goal()
+            mock_thread.assert_not_called()
+
+        assert card.goal_text == "Local edited"
 
 
 class TestJournalScreen:

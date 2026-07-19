@@ -201,6 +201,45 @@ class TestAPIClient:
         expected_monday = (today - timedelta(days=today.weekday())).isoformat()
         assert payload["week_start_date"] == expected_monday
 
+    @patch("services.api_client.requests.get")
+    def test_get_goals_passes_week_filter(self, mock_get):
+        """get_goals(week) sends ?week_start_date as a query param."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = []
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        client = APIClient()
+        client.get_goals("2026-07-13")
+
+        assert mock_get.call_args[1]["params"] == {"week_start_date": "2026-07-13"}
+
+    @patch("services.api_client.requests.get")
+    def test_get_goals_without_week_sends_no_filter(self, mock_get):
+        """get_goals() with no week sends params=None (all goals)."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = []
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        client = APIClient()
+        client.get_goals()
+
+        assert mock_get.call_args[1]["params"] is None
+
+    @patch("services.api_client.requests.post")
+    def test_create_goal_uses_provided_week(self, mock_post):
+        """create_goal(week_start_date=...) uses the given week, not the current one."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"id": 1}
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        client = APIClient()
+        client.create_goal("Test goal", week_start_date="2026-07-13")
+
+        assert mock_post.call_args[1]["json"]["week_start_date"] == "2026-07-13"
+
     @patch("services.api_client.requests.patch")
     def test_update_goal_uses_patch(self, mock_patch):
         """update_goal must use PATCH (not PUT) — PUT returns 400 Bad Request."""

@@ -190,18 +190,38 @@ class APIClient:
         return bool(self.token)
 
     # Goals endpoints
-    def get_goals(self) -> List[Dict]:
-        """Get all goals for current week"""
-        return self._request("get", f"{self.API_BASE_URL}/goals/").json()
+    def get_goals(self, week_start_date: Optional[str] = None) -> List[Dict]:
+        """Get goals, optionally scoped to a single week.
 
-    def create_goal(self, goal_text: str, category: str = "personal") -> Dict:
-        """Create new weekly goal for the current week."""
-        today = date.today()
-        week_start = today - timedelta(days=today.weekday())
+        Args:
+            week_start_date: Monday of the week (YYYY-MM-DD). When provided, the
+                backend filters to that week; when omitted, it returns all of the
+                user's goals across every week.
+        """
+        params = {"week_start_date": week_start_date} if week_start_date else None
+        return self._request(
+            "get", f"{self.API_BASE_URL}/goals/", params=params
+        ).json()
+
+    def create_goal(
+        self,
+        goal_text: str,
+        category: str = "personal",
+        week_start_date: Optional[str] = None,
+    ) -> Dict:
+        """Create a new weekly goal.
+
+        Args:
+            week_start_date: Monday of the target week (YYYY-MM-DD). Defaults to
+                the Monday of the current week when omitted.
+        """
+        if week_start_date is None:
+            today = date.today()
+            week_start_date = (today - timedelta(days=today.weekday())).isoformat()
         data = {
             "goal_text": goal_text,
             "category": category,
-            "week_start_date": week_start.isoformat(),
+            "week_start_date": week_start_date,
         }
         return self._request("post", f"{self.API_BASE_URL}/goals/", json=data).json()
 
