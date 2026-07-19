@@ -5,9 +5,11 @@ API Client for communicating with Django backend
 import os
 import json
 import threading
-from datetime import date, timedelta
+from datetime import date
 import requests
 from typing import Optional, Dict, List
+
+from utils.week import monday_of
 
 # On Android (p4a), expanduser("~") resolves to /data which is not writable.
 # Fall back to the app's internal files directory (parent of the working dir).
@@ -20,8 +22,12 @@ TOKEN_FILE = os.path.join(_token_dir, ".coach_assistant_token.json")
 class APIClient:
     """Handles all API communication with the backend"""
 
-    # For phone testing: change to your laptop's local IP, e.g. http://192.168.1.x:8000/api
-    API_BASE_URL = "http://localhost:8000/api"
+    # Defaults to the backend's mDNS (.local) name, which resolves on the LAN
+    # via Bonjour/Avahi to whatever IP the server currently has — so any device
+    # on the same network works with no per-machine setup and no IP hardcoded.
+    # Override per-machine (e.g. localhost for dev on the server itself) via
+    # the COACH_API_URL env var.
+    API_BASE_URL = os.getenv("COACH_API_URL", "http://coach-backend.local:8000/api")
 
     REQUEST_TIMEOUT = 15  # seconds
 
@@ -190,18 +196,37 @@ class APIClient:
         return bool(self.token)
 
     # Goals endpoints
-    def get_goals(self) -> List[Dict]:
-        """Get all goals for current week"""
-        return self._request("get", f"{self.API_BASE_URL}/goals/").json()
+    def get_goals(self, week_start_date: Optional[str] = None) -> List[Dict]:
+        """Get goals, optionally scoped to a single week.
 
-    def create_goal(self, goal_text: str, category: str = "personal") -> Dict:
-        """Create new weekly goal for the current week."""
-        today = date.today()
-        week_start = today - timedelta(days=today.weekday())
+        Args:
+            week_start_date: Monday of the week (YYYY-MM-DD). When provided, the
+                backend filters to that week; when omitted, it returns all of the
+                user's goals across every week.
+        """
+        params = {"week_start_date": week_start_date} if week_start_date else None
+        return self._request(
+            "get", f"{self.API_BASE_URL}/goals/", params=params
+        ).json()
+
+    def create_goal(
+        self,
+        goal_text: str,
+        category: str = "personal",
+        week_start_date: Optional[str] = None,
+    ) -> Dict:
+        """Create a new weekly goal.
+
+        Args:
+            week_start_date: Monday of the target week (YYYY-MM-DD). Defaults to
+                the Monday of the current week when omitted.
+        """
+        if week_start_date is None:
+            week_start_date = monday_of(date.today()).isoformat()
         data = {
             "goal_text": goal_text,
             "category": category,
-            "week_start_date": week_start.isoformat(),
+            "week_start_date": week_start_date,
         }
         return self._request("post", f"{self.API_BASE_URL}/goals/", json=data).json()
 

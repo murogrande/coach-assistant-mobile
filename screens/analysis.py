@@ -21,6 +21,7 @@ from kivymd.uix.scrollview import MDScrollView
 
 from services.api_client import api_client
 from utils.debounce import debounce
+from utils.week import monday_of, week_range_text
 
 
 BLUE = (0.129, 0.588, 0.953, 1)
@@ -55,16 +56,12 @@ _SECTIONS = [
 ]
 
 
-def _monday_of(d: date) -> date:
-    return d - timedelta(days=d.weekday())
-
-
 class AnalysisScreen(MDScreen):
     """Screen for viewing weekly AI analysis"""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._current_week_start = _monday_of(date.today())
+        self._current_week_start = monday_of(date.today())
         self._section_cards = {}
         self._section_labels = {}
         self._dialog = None
@@ -297,10 +294,7 @@ class AnalysisScreen(MDScreen):
     # --- Week navigation ---
 
     def _week_text(self) -> str:
-        end = self._current_week_start + timedelta(days=6)
-        s = self._current_week_start.strftime('%b %d').replace(' 0', ' ')
-        e = end.strftime('%b %d, %Y').replace(' 0', ' ')
-        return f"{s} – {e}"
+        return week_range_text(self._current_week_start)
 
     @debounce()
     def _change_week(self, delta: int):

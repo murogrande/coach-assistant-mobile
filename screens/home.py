@@ -14,6 +14,7 @@ from kivymd.icon_definitions import md_icons
 
 from services.api_client import api_client
 from utils.debounce import debounce
+from utils.week import monday_of
 
 
 BLUE = (0.129, 0.588, 0.953, 1)
@@ -295,7 +296,8 @@ class HomeScreen(MDScreen):
             goals_value = "—"
             journal_value = "—"
             try:
-                goals = api_client.get_goals()
+                week_start = monday_of(datetime.date.today()).isoformat()
+                goals = api_client.get_goals(week_start)
                 completed = sum(1 for g in goals if g.get("completed"))
                 goals_value = f"{completed}/{len(goals)}"
             except Exception:

@@ -490,7 +490,7 @@ class TestGoalsScreen:
         screen_manager.add_widget(screen)
 
         cards_before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
-        screen.new_goal_field = MDTextField(text="   ")
+        screen._goal_field = MDTextField(text="   ")
         screen._dialog = MagicMock()
 
         with patch("screens.goals.threading.Thread") as mock_thread:
@@ -508,7 +508,7 @@ class TestGoalsScreen:
         screen = GoalsScreen(name="goals")
         screen_manager.add_widget(screen)
 
-        screen.new_goal_field = MDTextField(text="Walk 10k steps")
+        screen._goal_field = MDTextField(text="Walk 10k steps")
         screen._dialog = MagicMock()
 
         with patch("screens.goals.threading.Thread") as mock_thread:
@@ -611,6 +611,212 @@ class TestGoalsScreen:
 
         screen.show_error("Network error")
         assert screen.status_label.text == "Network error"
+
+    def test_on_load_error_reenables_nav(self, screen_manager):
+        """A failed week load re-enables the arrows and shows the message."""
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._set_nav_enabled(False)  # load in flight
+
+        screen._on_load_error("boom")
+
+        assert screen._prev_btn.disabled is False
+        assert screen._next_btn.disabled is False
+        assert screen.status_label.text == "boom"
+
+    def test_show_error_leaves_nav_disabled_during_load(self, screen_manager):
+        """A non-load action error must not re-enable arrows while a load runs."""
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._set_nav_enabled(False)  # a week load is in flight
+
+        screen.show_error("toggle failed")
+
+        assert screen._prev_btn.disabled is True
+        assert screen._next_btn.disabled is True
+
+    def test_confirm_add_goal_uses_selected_week(self, screen_manager):
+        """confirm_add_goal creates the goal for the currently selected week."""
+        from datetime import date
+        from screens.goals import GoalsScreen
+        from kivymd.uix.textfield import MDTextField
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._current_week_start = date(2026, 7, 13)  # a Monday
+        screen._goal_field = MDTextField(text="Plan the week")
+        screen._dialog = MagicMock()
+
+        with patch("services.api_client.api_client.create_goal") as mock_create, \
+             patch("screens.goals.threading.Thread") as mock_thread:
+            # Run the worker synchronously so we can assert the API call.
+            mock_thread.side_effect = lambda target, daemon=None: MagicMock(
+                start=target
+            )
+            mock_create.return_value = {"id": 99}
+            screen.confirm_add_goal()
+
+        mock_create.assert_called_once_with(
+            "Plan the week", week_start_date="2026-07-13"
+        )
+
+    def test_add_created_goal_skips_if_week_changed(self, screen_manager):
+        """A create that resolves after navigating away isn't rendered on the new week."""
+        from datetime import date
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._current_week_start = date(2026, 7, 20)  # user has moved to another week
+        before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+
+        # Goal was created for the previously selected week.
+        screen._add_created_goal("Stale goal", 1, "2026-07-13")
+
+        after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        assert len(after) == len(before)
+
+    def test_add_created_goal_renders_if_week_matches(self, screen_manager):
+        """A create that resolves while its week is still shown renders the card."""
+        from datetime import date
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._current_week_start = date(2026, 7, 13)
+
+        screen._add_created_goal("Fresh goal", 1, "2026-07-13")
+
+        cards = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        assert any(c.goal_text == "Fresh goal" for c in cards)
+
+    def test_change_week_reloads_goals(self, screen_manager):
+        """_change_week shifts the week by 7 days and reloads."""
+        from datetime import date
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._current_week_start = date(2026, 7, 13)
+
+        with patch.object(screen, "load_goals") as mock_load:
+            screen._change_week(1)
+            assert screen._current_week_start == date(2026, 7, 20)
+            mock_load.assert_called_once()
+
+    def test_edit_goal_persists_new_text(self, screen_manager):
+        """confirm_edit_goal PATCHes goal_text and updates the card label."""
+        from screens.goals import GoalsScreen, GoalCard
+        from kivymd.uix.textfield import MDTextField
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._add_goal_card("Old text", goal_id=5)
+        card = next(w for w in screen.goals_list.children if isinstance(w, GoalCard))
+
+        screen._editing_card = card
+        screen._goal_field = MDTextField(text="New text")
+        screen._dialog = MagicMock()
+
+        with patch("services.api_client.api_client.update_goal") as mock_update, \
+             patch("screens.goals.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)), \
+             patch("screens.goals.threading.Thread") as mock_thread:
+            mock_thread.side_effect = lambda target, daemon=None: MagicMock(
+                start=target
+            )
+            screen.confirm_edit_goal()
+
+        mock_update.assert_called_once_with(5, goal_text="New text")
+        assert card.goal_text == "New text"
+
+    def test_edit_goal_ignores_unchanged_text(self, screen_manager):
+        """confirm_edit_goal does nothing when the text is unchanged."""
+        from screens.goals import GoalsScreen, GoalCard
+        from kivymd.uix.textfield import MDTextField
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._add_goal_card("Same text", goal_id=5)
+        card = next(w for w in screen.goals_list.children if isinstance(w, GoalCard))
+
+        screen._editing_card = card
+        screen._goal_field = MDTextField(text="Same text")
+        screen._dialog = MagicMock()
+
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            screen.confirm_edit_goal()
+            mock_thread.assert_not_called()
+
+    def test_edit_goal_local_card_updates_without_api(self, screen_manager):
+        """Editing a not-yet-persisted card updates text without an API call."""
+        from screens.goals import GoalsScreen, GoalCard
+        from kivymd.uix.textfield import MDTextField
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._add_goal_card("Local")  # no goal_id
+        card = next(w for w in screen.goals_list.children if isinstance(w, GoalCard))
+
+        screen._editing_card = card
+        screen._goal_field = MDTextField(text="Local edited")
+        screen._dialog = MagicMock()
+
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            screen.confirm_edit_goal()
+            mock_thread.assert_not_called()
+
+        assert card.goal_text == "Local edited"
+
+    def test_on_pre_enter_resets_to_current_week(self, screen_manager):
+        """on_pre_enter snaps back to the current week (not a previously browsed one)."""
+        from datetime import date
+        from screens.goals import GoalsScreen
+        from utils.week import monday_of
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._current_week_start = date(2000, 1, 3)  # a Monday, long in the past
+
+        with patch.object(screen, "load_goals"):
+            screen.on_pre_enter()
+
+        assert screen._current_week_start == monday_of(date.today())
+
+    def test_populate_goals_ignores_stale_week(self, screen_manager):
+        """A response for a week the user already left is dropped, not rendered."""
+        from screens.goals import GoalsScreen, GoalCard
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+        screen._add_goal_card("existing", goal_id=1)
+        before = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+
+        # week_start_str for a different week than the one currently selected.
+        screen._populate_goals(
+            [{"id": 2, "goal_text": "stale"}], week_start_str="1999-01-04"
+        )
+
+        after = [w for w in screen.goals_list.children if isinstance(w, GoalCard)]
+        assert len(after) == len(before)
+        assert all(c.goal_text != "stale" for c in after)
+
+    def test_load_goals_disables_nav_while_loading(self, screen_manager):
+        """load_goals disables the week arrows until the fetch completes."""
+        from screens.goals import GoalsScreen
+
+        screen = GoalsScreen(name="goals")
+        screen_manager.add_widget(screen)
+
+        with patch("screens.goals.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen.load_goals()
+
+        assert screen._prev_btn.disabled is True
+        assert screen._next_btn.disabled is True
 
 
 class TestJournalScreen:
