@@ -70,6 +70,9 @@ class AnalysisScreen(MDScreen):
         self._status_event = None
         self._status_index = 0
         self._analysis_plain_text = ""
+        # Week (ISO string) a generation is currently running for, else None.
+        # Survives leaving the screen, so coming back can restore the loading UI.
+        self._generating_week = None
         self.build_ui()
 
     def build_ui(self):
@@ -335,7 +338,10 @@ class AnalysisScreen(MDScreen):
         exists, keeping the whole screen redrawing even at opacity 0.
         """
         self.generate_btn.disabled = loading
-        self.delete_btn.disabled = loading
+        # Deleting needs something to delete: callers that show an analysis set
+        # _current_analysis_id first, so this keeps the hidden button inert
+        # instead of relying on every caller to disable it again afterwards.
+        self.delete_btn.disabled = loading or not self._current_analysis_id
         self._prev_btn.disabled = loading
         self._next_btn.disabled = loading
         self._loading_box.opacity = 1 if loading else 0
@@ -439,10 +445,33 @@ class AnalysisScreen(MDScreen):
         # or the status cycle.  Stop them now; on_enter restarts them if needed.
         self.show_loading(False)
 
+    def _is_current_request(self, week_start_str: str) -> bool:
+        """Whether a response for ``week_start_str`` should still be applied.
+
+        Responses arrive on background threads, so by the time one lands the
+        screen may have moved on: it can be hidden, showing a different week,
+        or waiting on a generation for this week (whose result supersedes any
+        list fetch that was already in flight).
+        """
+        return (
+            self._active
+            and self._generating_week != week_start_str
+            and week_start_str == self._current_week_start.isoformat()
+        )
+
     def load_for_week(self):
         """Load the analysis for the currently selected week."""
-        self.show_loading(True)
         week_start_str = self._current_week_start.isoformat()
+
+        if self._generating_week == week_start_str:
+            # Generation is still running (the user left and came back). Its
+            # result will populate the screen, so restore the loading UI and
+            # skip the fetch instead of racing it.
+            self.show_loading(True)
+            self._start_status_cycle()
+            return
+
+        self.show_loading(True)
 
         def _fetch():
             try:
@@ -451,15 +480,27 @@ class AnalysisScreen(MDScreen):
                     (e for e in entries if e.get("week_start_date") == week_start_str),
                     None,
                 )
-                if match:
-                    Clock.schedule_once(lambda _: self._active and self.show_analysis(match))
-                else:
-                    Clock.schedule_once(lambda _: self._active and self.show_empty_state())
+                Clock.schedule_once(lambda _: self._apply_loaded(week_start_str, match))
             except Exception as e:
                 err = str(e)
-                Clock.schedule_once(lambda _: self._active and self._on_error(err, "load"))
+                Clock.schedule_once(lambda _: self._fail_request(week_start_str, err, "load"))
 
         threading.Thread(target=_fetch, daemon=True).start()
+
+    def _apply_loaded(self, week_start_str: str, match):
+        """Show a loaded analysis, unless the screen has moved on."""
+        if not self._is_current_request(week_start_str):
+            return
+        if match:
+            self.show_analysis(match)
+        else:
+            self.show_empty_state()
+
+    def _fail_request(self, week_start_str: str, message: str, context: str):
+        """Report a failed request, unless the screen has moved on."""
+        if not self._is_current_request(week_start_str):
+            return
+        self._on_error(message, context)
 
     def _on_error(self, message: str, context: str = "load"):
         self.show_empty_state()
@@ -562,9 +603,10 @@ class AnalysisScreen(MDScreen):
         backend will create a fresh one instead of returning the cached result.
         """
         self._close_dialog()
+        week_start_str = self._current_week_start.isoformat()
+        self._generating_week = week_start_str
         self.show_loading(True)
         self._start_status_cycle()
-        week_start_str = self._current_week_start.isoformat()
         analysis_id_to_delete = self._current_analysis_id
 
         def _fetch():
@@ -573,9 +615,25 @@ class AnalysisScreen(MDScreen):
                     api_client.delete_analysis(analysis_id_to_delete)
                 result = api_client.generate_analysis(week_start_str)
                 data = result.get("analysis") or result
-                Clock.schedule_once(lambda _: self._active and self.show_analysis(data))
+                Clock.schedule_once(lambda _: self._finish_generate(week_start_str, data=data))
             except Exception as e:
                 err = str(e)
-                Clock.schedule_once(lambda _: self._active and self._on_error(err, "generate"))
+                Clock.schedule_once(lambda _: self._finish_generate(week_start_str, error=err))
 
         threading.Thread(target=_fetch, daemon=True).start()
+
+    def _finish_generate(self, week_start_str: str, data=None, error=None):
+        """Apply a finished generation.
+
+        The in-flight marker is always cleared, even when the result is dropped
+        because the user left or moved to another week — otherwise the screen
+        would keep waiting for a generation that has already finished.
+        """
+        if self._generating_week == week_start_str:
+            self._generating_week = None
+        if not self._is_current_request(week_start_str):
+            return
+        if error is not None:
+            self._on_error(error, "generate")
+        else:
+            self.show_analysis(data)

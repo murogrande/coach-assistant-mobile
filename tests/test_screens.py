@@ -1500,18 +1500,24 @@ class TestAnalysisScreen:
         mock_copy.assert_not_called()
 
     @staticmethod
-    def _idle_screen(screen_manager, name):
-        """An AnalysisScreen on a manager, with the on_enter load stubbed out.
+    def _idle_screen(screen_manager, name, stub_load=True):
+        """An AnalysisScreen on a manager, with the on_enter load neutralised.
 
         add_widget() makes the screen current, which fires on_enter ->
-        load_for_week() -> show_loading(True); stubbing the load keeps the
-        spinner state under the test's control (and off the network).
+        load_for_week() -> show_loading(True), so the spinner state has to be
+        put back under the test's control (and off the network).  Tests that
+        exercise load_for_week() itself pass stub_load=False to keep the real
+        method, and only the initial fetch is suppressed.
         """
         from screens.analysis import AnalysisScreen
 
         screen = AnalysisScreen(name=name)
-        screen.load_for_week = lambda *a, **k: None
-        screen_manager.add_widget(screen)
+        if stub_load:
+            screen.load_for_week = lambda *a, **k: None
+            screen_manager.add_widget(screen)
+        else:
+            with patch("screens.analysis.threading.Thread"):
+                screen_manager.add_widget(screen)
         return screen
 
     def test_spinner_is_idle_until_loading(self, screen_manager):
@@ -1594,3 +1600,170 @@ class TestAnalysisScreen:
         assert screen._active is False
         assert screen._spinner.active is False
         assert screen._status_event is None
+
+    def test_delete_button_stays_inert_without_an_analysis(self, screen_manager):
+        """show_loading(False) must not enable Delete when there is nothing to delete.
+
+        The button is invisible in the empty state, and Kivy does not hit-test
+        opacity, so an enabled one would be a tappable dead zone.
+        """
+        screen = self._idle_screen(screen_manager, "analysis_del1")
+
+        screen.show_empty_state()
+        assert screen.delete_btn.disabled is True
+
+        screen.on_leave()
+        assert screen.delete_btn.disabled is True
+        assert screen.delete_btn.opacity == 0
+
+    def test_delete_button_enabled_once_an_analysis_is_shown(self, screen_manager):
+        """The guard must not keep Delete disabled when an analysis is loaded."""
+        screen = self._idle_screen(screen_manager, "analysis_del2")
+
+        screen.show_analysis({"id": 7, "summary": "Good week"})
+
+        assert screen.delete_btn.disabled is False
+        assert screen.delete_btn.opacity == 1
+
+    def test_returning_during_generation_resumes_the_loading_ui(self, screen_manager):
+        """Re-entering while a generation runs restores the spinner and its messages.
+
+        It must not start a list fetch either: that response would race the
+        generation and could overwrite the fresh analysis.
+        """
+        from screens.analysis import _GENERATION_STEPS
+
+        screen = self._idle_screen(screen_manager, "analysis_resume", stub_load=False)
+
+        with patch("screens.analysis.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen._do_generate()
+
+        assert screen._generating_week == screen._current_week_start.isoformat()
+
+        screen.on_leave()
+        assert screen._spinner.active is False
+        assert screen._status_event is None
+
+        with patch("screens.analysis.threading.Thread") as mock_thread:
+            screen.on_enter()
+            mock_thread.assert_not_called()
+
+        assert screen._spinner.active is True
+        assert screen._status_event is not None
+        assert screen._loading_label.text in _GENERATION_STEPS
+
+    def test_load_response_for_another_week_is_ignored(self, screen_manager):
+        """A slow load for one week must not overwrite the week shown now."""
+        from datetime import timedelta
+
+        screen = self._idle_screen(screen_manager, "analysis_race1", stub_load=False)
+        week_a = screen._current_week_start.isoformat()
+        entry_a = {"id": 1, "week_start_date": week_a, "summary": "week A"}
+
+        with patch("screens.analysis.api_client.get_analysis_list", return_value=[entry_a]):
+            with patch("screens.analysis.threading.Thread") as mock_thread:
+                mock_thread.return_value = MagicMock()
+                screen.load_for_week()
+                target = mock_thread.call_args[1]["target"]
+
+        # the user navigates to another week before the response lands
+        screen._current_week_start += timedelta(weeks=1)
+
+        with patch.object(screen, "show_analysis") as mock_show:
+            with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
+                with patch("screens.analysis.api_client.get_analysis_list", return_value=[entry_a]):
+                    target()
+
+        mock_show.assert_not_called()
+
+    def test_load_response_is_ignored_while_generating(self, screen_manager):
+        """A list fetch already in flight must not cancel a generation started after it."""
+        screen = self._idle_screen(screen_manager, "analysis_race2", stub_load=False)
+
+        with patch("screens.analysis.api_client.get_analysis_list", return_value=[]):
+            with patch("screens.analysis.threading.Thread") as mock_thread:
+                mock_thread.return_value = MagicMock()
+                screen.load_for_week()
+                target = mock_thread.call_args[1]["target"]
+
+        # the user hits Generate before the list response lands
+        with patch("screens.analysis.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen._do_generate()
+
+        with patch.object(screen, "show_empty_state") as mock_empty:
+            with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
+                with patch("screens.analysis.api_client.get_analysis_list", return_value=[]):
+                    target()
+
+        mock_empty.assert_not_called()
+        assert screen._spinner.active is True
+        assert screen._status_event is not None
+
+    def test_generation_response_for_another_week_is_ignored(self, screen_manager):
+        """A generation that lands after a week change is dropped, but stops waiting."""
+        from datetime import timedelta
+
+        screen = self._idle_screen(screen_manager, "analysis_race3", stub_load=False)
+        api_response = {"id": 5, "summary": "week A"}
+
+        with patch("screens.analysis.threading.Thread") as mock_thread:
+            mock_thread.return_value = MagicMock()
+            screen._do_generate()
+            target = mock_thread.call_args[1]["target"]
+
+        screen._current_week_start += timedelta(weeks=1)
+
+        with patch.object(screen, "show_analysis") as mock_show:
+            with patch("screens.analysis.Clock.schedule_once", side_effect=lambda fn, *a: fn(0)):
+                with patch("screens.analysis.api_client.generate_analysis", return_value=api_response):
+                    target()
+
+        mock_show.assert_not_called()
+        # the marker must be cleared even when the result is discarded, or the
+        # screen would wait forever for a generation that already finished
+        assert screen._generating_week is None
+
+    @staticmethod
+    def _spinner_animations(screen):
+        """Animations currently running on the screen's progress indicator.
+
+        Asserting on this rather than on `_spinner.active` checks the property
+        that actually costs CPU: a running animation repaints every frame, so a
+        flag that says "stopped" while animations survive would still burn a
+        core.
+        """
+        from kivy.animation import Animation
+
+        return [
+            anim
+            for anim in Animation._instances
+            if anim.have_properties_to_animate(screen._spinner)
+        ]
+
+    def test_stopping_the_spinner_cancels_its_animations(self, screen_manager):
+        """show_loading(False) cancels the animations, not just the active flag."""
+        screen = self._idle_screen(screen_manager, "analysis_spin6")
+
+        assert self._spinner_animations(screen) == []
+
+        screen.show_loading(True)
+        assert self._spinner_animations(screen) != []
+
+        screen.show_loading(False)
+        assert self._spinner_animations(screen) == []
+
+    def test_spinner_restarts_for_a_second_generation(self, screen_manager):
+        """Stopping the spinner must not leave it dead for the next generation."""
+        screen = self._idle_screen(screen_manager, "analysis_spin7")
+
+        screen.show_loading(True)
+        screen.show_analysis({"id": 1, "summary": "Good week"})
+        assert screen._spinner.active is False
+        assert self._spinner_animations(screen) == []
+
+        # user taps Regenerate
+        screen.show_loading(True)
+        assert screen._spinner.active is True
+        assert self._spinner_animations(screen) != []
