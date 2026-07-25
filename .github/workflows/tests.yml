@@ -51,9 +51,11 @@ jobs:
         # while windows-latest currently resolves to Server 2025 (build 26100),
         # so both are covered.
         os: [windows-2022, windows-latest, macos-latest]
-        # 3.10 is what Buildozer/python-for-android ships for the APK; 3.12
-        # catches breakage for anyone running the desktop app on a newer Python.
-        python-version: ["3.10", "3.12"]
+        # 3.10 is the desktop baseline, 3.12 catches breakage on a newer
+        # interpreter, and 3.14 is what python-for-android currently builds into
+        # the APK (its python3 recipe pins 3.14.2), so it is the version the app
+        # actually runs on a phone.
+        python-version: ["3.10", "3.12", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
