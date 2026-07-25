@@ -46,15 +46,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        # GitHub hosts no Windows 10 client runner.  windows-2022 (Server 2022,
+        # build 20348) is the closest image — same Windows 10 kernel line —
+        # while windows-latest currently resolves to Server 2025 (build 26100),
+        # so both are covered.
+        os: [windows-2022, windows-latest, macos-latest]
+        # 3.10 is the desktop baseline, 3.12 catches breakage on a newer
+        # interpreter, and 3.14 is what python-for-android currently builds into
+        # the APK (its python3 recipe pins 3.14.2), so it is the version the app
+        # actually runs on a phone.
+        python-version: ["3.10", "3.12", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install Python dependencies
         # Only install what test_api_client.py needs — no Kivy/KivyMD required.
