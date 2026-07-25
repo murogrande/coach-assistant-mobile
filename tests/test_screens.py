@@ -1498,3 +1498,99 @@ class TestAnalysisScreen:
             screen._copy_analysis()
 
         mock_copy.assert_not_called()
+
+    @staticmethod
+    def _idle_screen(screen_manager, name):
+        """An AnalysisScreen on a manager, with the on_enter load stubbed out.
+
+        add_widget() makes the screen current, which fires on_enter ->
+        load_for_week() -> show_loading(True); stubbing the load keeps the
+        spinner state under the test's control (and off the network).
+        """
+        from screens.analysis import AnalysisScreen
+
+        screen = AnalysisScreen(name=name)
+        screen.load_for_week = lambda *a, **k: None
+        screen_manager.add_widget(screen)
+        return screen
+
+    def test_spinner_is_idle_until_loading(self, screen_manager):
+        """The spinner does not animate until show_loading(True).
+
+        An active MDCircularProgressIndicator repaints every frame for as long
+        as it lives, so hiding it with opacity alone leaves the whole screen
+        redrawing continuously.
+        """
+        screen = self._idle_screen(screen_manager, "analysis_spin1")
+
+        assert screen._spinner.active is False
+
+        screen.show_loading(True)
+        assert screen._spinner.active is True
+
+        screen.show_loading(False)
+        assert screen._spinner.active is False
+
+    def test_show_analysis_stops_spinner_and_status_cycle(self, screen_manager):
+        """A finished generation leaves no spinner animation and no timer running."""
+        screen = self._idle_screen(screen_manager, "analysis_spin2")
+
+        # Simulate the generate flow: loading UI + status message cycle...
+        screen.show_loading(True)
+        screen._start_status_cycle()
+        assert screen._spinner.active is True
+        assert screen._status_event is not None
+
+        # ...then the result arrives.
+        screen.show_analysis({"id": 1, "summary": "Good week"})
+
+        assert screen._spinner.active is False
+        assert screen._status_event is None
+        assert screen._loading_box.opacity == 0
+        # routing through show_loading(False) must still restore the controls
+        assert screen.generate_btn.disabled is False
+        assert screen.delete_btn.disabled is False
+        assert screen._prev_btn.disabled is False
+        assert screen._next_btn.disabled is False
+        assert screen.week_label.text == screen._week_text()
+
+    def test_show_empty_state_stops_spinner_and_status_cycle(self, screen_manager):
+        """A generation that returns nothing also stops the spinner and timer."""
+        screen = self._idle_screen(screen_manager, "analysis_spin3")
+
+        screen.show_loading(True)
+        screen._start_status_cycle()
+        screen.show_empty_state()
+
+        assert screen._spinner.active is False
+        assert screen._status_event is None
+        assert screen._empty_card.opacity == 1
+        assert screen.delete_btn.disabled is True
+
+    def test_error_stops_spinner_and_status_cycle(self, screen_manager):
+        """A failed generation stops the spinner and timer too."""
+        screen = self._idle_screen(screen_manager, "analysis_spin4")
+
+        screen.show_loading(True)
+        screen._start_status_cycle()
+        screen._on_error("boom", "generate")
+
+        assert screen._spinner.active is False
+        assert screen._status_event is None
+        assert "Failed to generate" in screen.analysis_text.text
+
+    def test_leaving_screen_stops_spinner_and_status_cycle(self, screen_manager):
+        """Navigating away mid-generation does not leave work running.
+
+        The in-flight result is discarded (_active is False), so nothing else
+        would ever stop the spinner or the status cycle.
+        """
+        screen = self._idle_screen(screen_manager, "analysis_spin5")
+
+        screen.show_loading(True)
+        screen._start_status_cycle()
+        screen.on_leave()
+
+        assert screen._active is False
+        assert screen._spinner.active is False
+        assert screen._status_event is None

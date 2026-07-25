@@ -177,10 +177,15 @@ class AnalysisScreen(MDScreen):
             spacing=16,
             opacity=0,
         )
+        # active=False so the indicator does not animate from app startup — its
+        # animation loop marks the window dirty every frame, which forces Kivy to
+        # redraw the whole screen continuously.  show_loading() turns it on and
+        # off; hiding it with opacity alone would leave the animation running.
         self._spinner = MDCircularProgressIndicator(
             size_hint=(None, None),
             size=(48, 48),
             pos_hint={"center_x": 0.5},
+            active=False,
         )
         self._loading_label = MDLabel(
             text="Loading…",
@@ -323,12 +328,18 @@ class AnalysisScreen(MDScreen):
             self._status_event = None
 
     def show_loading(self, loading: bool):
-        """Show or hide the loading spinner."""
+        """Show or hide the loading spinner.
+
+        The spinner is stopped, not just hidden: an active
+        MDCircularProgressIndicator animates every frame for as long as it
+        exists, keeping the whole screen redrawing even at opacity 0.
+        """
         self.generate_btn.disabled = loading
         self.delete_btn.disabled = loading
         self._prev_btn.disabled = loading
         self._next_btn.disabled = loading
         self._loading_box.opacity = 1 if loading else 0
+        self._spinner.active = loading
         if loading:
             self._empty_card.opacity = 0
             self._hide_sections()
@@ -366,12 +377,10 @@ class AnalysisScreen(MDScreen):
     def show_analysis(self, data: dict):
         """Populate and reveal all analysis section cards."""
         self._current_analysis_id = data.get("id")
+        # Stops the spinner and the status-message cycle, hides the loading box,
+        # re-enables the buttons and restores the week label.
+        self.show_loading(False)
         self._empty_card.opacity = 0
-        self._loading_box.opacity = 0
-        self.generate_btn.disabled = False
-        self._prev_btn.disabled = False
-        self._next_btn.disabled = False
-        self.week_label.text = self._week_text()
         parts = [f"Weekly Analysis — {self._week_text()}"]
         for key, title, _ in _SECTIONS:
             text = self._format_section(data.get(key, ""))
@@ -388,12 +397,8 @@ class AnalysisScreen(MDScreen):
     def show_empty_state(self):
         """Show the empty state and hide sections and loading."""
         self._current_analysis_id = None
+        self.show_loading(False)
         self._empty_card.opacity = 1
-        self._loading_box.opacity = 0
-        self.generate_btn.disabled = False
-        self._prev_btn.disabled = False
-        self._next_btn.disabled = False
-        self.week_label.text = self._week_text()
         self._hide_sections()
         self._analysis_plain_text = ""
         self._copy_btn.opacity = 0
@@ -429,6 +434,10 @@ class AnalysisScreen(MDScreen):
 
     def on_leave(self, *_):
         self._active = False
+        # A generation started here keeps running in its thread, but its result
+        # is dropped (_active is False), so nothing would ever stop the spinner
+        # or the status cycle.  Stop them now; on_enter restarts them if needed.
+        self.show_loading(False)
 
     def load_for_week(self):
         """Load the analysis for the currently selected week."""
@@ -453,7 +462,6 @@ class AnalysisScreen(MDScreen):
         threading.Thread(target=_fetch, daemon=True).start()
 
     def _on_error(self, message: str, context: str = "load"):
-        self._stop_status_cycle()
         self.show_empty_state()
         if "401" in message:
             self.analysis_text.text = (
