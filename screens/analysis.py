@@ -202,12 +202,17 @@ class AnalysisScreen(MDScreen):
         scroll_inner.add_widget(self._loading_box)
 
         # Empty state card
+        # adaptive_height is set after add_widget rather than passed to the
+        # constructor: RippleBehavior creates its FBO from self.size during
+        # __init__, before any children exist. adaptive_height=True in the
+        # constructor kwargs drives height to minimum_height (0 with no
+        # children yet), producing a 0-height FBO that some GL drivers
+        # (native macOS) reject with "Incomplete attachment".
         self._empty_card = MDCard(
             orientation="vertical",
             padding=[20, 20, 20, 20],
             style="elevated",
             elevation=1,
-            adaptive_height=True,
         )
         self.analysis_text = MDLabel(
             text=_EMPTY_STATE_TEXT,
@@ -217,16 +222,18 @@ class AnalysisScreen(MDScreen):
             adaptive_height=True,
         )
         self._empty_card.add_widget(self.analysis_text)
+        self._empty_card.adaptive_height = True
         scroll_inner.add_widget(self._empty_card)
 
         # Analysis section cards (hidden until data loaded)
         for key, title, icon in _SECTIONS:
+            # adaptive_height is set after add_widget below — see comment on
+            # self._empty_card above.
             card = MDCard(
                 orientation="vertical",
                 padding=[16, 12, 16, 16],
                 style="elevated",
                 elevation=1,
-                adaptive_height=True,
                 opacity=0,
             )
             title_row = MDBoxLayout(
@@ -258,6 +265,7 @@ class AnalysisScreen(MDScreen):
             )
             card.add_widget(title_row)
             card.add_widget(value_lbl)
+            card.adaptive_height = True
             self._section_cards[key] = card
             self._section_labels[key] = value_lbl
             scroll_inner.add_widget(card)
