@@ -170,6 +170,20 @@ Token format: `{ "tokens": { "access": "...", "refresh": "..." } }`
 - Check `API_BASE_URL` in `services/api_client.py`
 - Use your computer's local IP when testing on a phone (not `localhost`)
 
+**Can't reach the backend over the LAN / `coach-backend.local` doesn't resolve**
+- `API_BASE_URL` defaults to `http://coach-backend.local:8000/api` (mDNS). This
+  only resolves if the backend machine's *actual hostname* is literally
+  `coach-backend` (mDNS/Avahi advertises whatever the hostname is, not an
+  arbitrary name) — `avahi-daemon` being active on that machine is not enough
+  on its own.
+- If the backend machine has a different hostname, either rename it
+  (`sudo hostnamectl set-hostname coach-backend && sudo systemctl restart avahi-daemon`)
+  or skip mDNS entirely: set the `COACH_API_URL` env var to the backend's LAN
+  IP before launching, e.g. `export COACH_API_URL="http://<backend-lan-ip>:8000/api"`.
+  Get a DHCP reservation for that IP on your router so it doesn't change on reboot.
+- On this laptop the override is already set in `~/.zshrc` (not tracked in
+  this repo) — check there first if the app still can't connect.
+
 **Buildozer errors**
 - Must be on Linux or WSL
 - Install system deps: `sudo apt-get install -y python3-pip build-essential git python3-dev`
