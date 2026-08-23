@@ -45,6 +45,26 @@ _EMPTY_STATE_TEXT = (
     "progress, patterns, and personalised recommendations."
 )
 
+
+def _adaptive_card(*children, **kwargs) -> MDCard:
+    """Build an MDCard that sizes its height to its content.
+
+    adaptive_height must NOT be passed to the MDCard constructor:
+    RippleBehavior creates its FBO from self.size during __init__, before any
+    children exist, and adaptive_height=True in the constructor kwargs drives
+    height to minimum_height (0 with no children yet), producing a 0-height
+    FBO that some GL drivers (native macOS) reject with "Incomplete
+    attachment". This helper adds the children first and only then enables
+    adaptive_height, so all content-sized cards share the safe construction
+    order instead of repeating it by hand.
+    """
+    card = MDCard(**kwargs)
+    for child in children:
+        card.add_widget(child)
+    card.adaptive_height = True
+    return card
+
+
 # (field_key, display_title, icon_name)
 _SECTIONS = [
     ("summary", "Summary", "text-box-outline"),
@@ -202,13 +222,6 @@ class AnalysisScreen(MDScreen):
         scroll_inner.add_widget(self._loading_box)
 
         # Empty state card
-        self._empty_card = MDCard(
-            orientation="vertical",
-            padding=[20, 20, 20, 20],
-            style="elevated",
-            elevation=1,
-            adaptive_height=True,
-        )
         self.analysis_text = MDLabel(
             text=_EMPTY_STATE_TEXT,
             font_style="Body",
@@ -216,19 +229,17 @@ class AnalysisScreen(MDScreen):
             halign="left",
             adaptive_height=True,
         )
-        self._empty_card.add_widget(self.analysis_text)
+        self._empty_card = _adaptive_card(
+            self.analysis_text,
+            orientation="vertical",
+            padding=[20, 20, 20, 20],
+            style="elevated",
+            elevation=1,
+        )
         scroll_inner.add_widget(self._empty_card)
 
         # Analysis section cards (hidden until data loaded)
         for key, title, icon in _SECTIONS:
-            card = MDCard(
-                orientation="vertical",
-                padding=[16, 12, 16, 16],
-                style="elevated",
-                elevation=1,
-                adaptive_height=True,
-                opacity=0,
-            )
             title_row = MDBoxLayout(
                 orientation="horizontal",
                 adaptive_height=True,
@@ -256,8 +267,15 @@ class AnalysisScreen(MDScreen):
                 halign="left",
                 adaptive_height=True,
             )
-            card.add_widget(title_row)
-            card.add_widget(value_lbl)
+            card = _adaptive_card(
+                title_row,
+                value_lbl,
+                orientation="vertical",
+                padding=[16, 12, 16, 16],
+                style="elevated",
+                elevation=1,
+                opacity=0,
+            )
             self._section_cards[key] = card
             self._section_labels[key] = value_lbl
             scroll_inner.add_widget(card)

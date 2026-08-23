@@ -48,10 +48,10 @@ class StatCard(MDCard):
         """
         super().__init__(
             orientation="vertical",
-            padding=[16, 14, 16, 14],
-            spacing=4,
+            padding=[18, 18, 18, 18],
+            spacing=6,
             size_hint=(1, None),
-            height=90,
+            height=108,
             elevation=1,
             style="elevated",
             **kwargs,
@@ -180,11 +180,13 @@ class HomeScreen(MDScreen):
         root = MDBoxLayout(orientation="vertical")
 
         # --- Hero header ---
+        # Extra top padding vs. the other screens' headers, since the greeting
+        # is still noticeably bigger than the Title styles those headers use.
         header = MDBoxLayout(
             orientation="vertical",
             size_hint=(1, None),
-            height=160,
-            padding=[24, 28, 24, 16],
+            height=176,
+            padding=[24, 52, 24, 16],
             spacing=4,
             md_bg_color=BLUE,
         )
@@ -193,8 +195,8 @@ class HomeScreen(MDScreen):
         title_col = MDBoxLayout(orientation="vertical", spacing=4, size_hint_x=1, adaptive_height=True)
         self.greeting_label = MDLabel(
             text=f"{_greeting()}!",
-            font_style="Display",
-            role="small",
+            font_style="Headline",
+            role="medium",
             theme_text_color="Custom",
             text_color=WHITE,
             adaptive_height=True,
@@ -237,7 +239,7 @@ class HomeScreen(MDScreen):
             orientation="horizontal",
             spacing=12,
             size_hint=(1, None),
-            height=90,
+            height=108,
         )
         self.goals_stat = StatCard(icon="flag-checkered", value="—", label="Goals this week")
         self.journal_stat = StatCard(icon="notebook", value="—", label="Journal entries")
